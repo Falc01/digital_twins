@@ -396,6 +396,217 @@ class DynTable:
             )
 
     # ═══════════════════════════════════════════════════════════
+    #  PERSISTÊNCIA  —  CSV + schema.json
+    #
+    #  Dois arquivos trabalham juntos:
+    #
+    #  dados.csv   → os valores (legível no Excel/editor de texto)
+    #  schema.json → os tipos, regras e estado interno da tabela
+    #
+    #  Por que separar?
+    #  O CSV sozinho perde tudo que não é "valor":
+    #    - qual coluna é FLOAT vs STRING
+    #    - qual coluna é nullable=False
+    #    - qual é o próximo ID (para não repetir)
+    #    - se a coluna já teve seu tipo travado (locked)
+    #
+    #  O schema.json guarda exatamente isso, sem duplicar os dados.
+    # ═══════════════════════════════════════════════════════════
+
+    def save(self, folder: str = ".") -> None:
+        """
+        Salva a tabela em dois arquivos dentro de `folder`:
+          - <nome_da_tabela>.csv   → dados
+          - <nome_da_tabela>.schema.json → estrutura
+
+        Uso:
+            table.save()                  # salva na pasta atual
+            table.save("meus_dados")      # salva em ./meus_dados/
+            table.save("/tmp/backup")     # caminho absoluto
+
+        Os dois arquivos sempre têm o mesmo prefixo (nome da tabela),
+        então fica fácil saber que pertencem ao mesmo conjunto.
+        """
+        import json
+        import os
+
+        # Garante que a pasta existe (cria se necessário)
+        # os.makedirs com exist_ok=True não dá erro se já existir
+        os.makedirs(folder, exist_ok=True)
+
+        base = os.path.join(folder, self.name)
+
+        # ── 1. Salva os DADOS em CSV ──────────────────────────
+        # Igual ao export_csv, mas com um detalhe extra:
+        # valores None viram a string especial "__NULL__"
+        # em vez de string vazia "".
+        #
+        # Por que não usar string vazia?
+        # Se uma coluna STRING tem o valor "" (string vazia de verdade),
+        # seria impossível distinguir de NULL ao reler.
+        # "__NULL__" é uma sentinela improvável de aparecer em dados reais.
+        csv_path = base + ".csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["__id__", "__created_at__"] + self._col_order)
+            for row in self:
+                writer.writerow(
+                    [row.id, row.created_at] +   # created_at como timestamp Unix (float)
+                    [
+                        row[col] if row[col] is not None else "__NULL__"
+                        for col in self._col_order
+                    ]
+                )
+
+        # ── 2. Salva o SCHEMA em JSON ─────────────────────────
+        # O schema é um dicionário com tudo que o CSV não carrega:
+        schema = {
+            "name":     self.name,
+            "next_id":  self._next_id,           # próximo ID a usar
+            "columns":  [
+                {
+                    "name":     col.name,
+                    "dtype":    col.dtype.name,  # "FLOAT", "STRING", etc.
+                    "nullable": col.nullable,
+                    "locked":   col.locked,      # tipo já foi inferido e travado?
+                }
+                for col in self.columns          # na ordem de inserção
+            ],
+        }
+        schema_path = base + ".schema.json"
+        with open(schema_path, "w", encoding="utf-8") as f:
+            # indent=2 deixa o JSON legível para humanos
+            json.dump(schema, f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load(cls, folder: str, name: str) -> "DynTable":
+        """
+        Carrega uma tabela salva anteriormente.
+
+        `classmethod` significa que você chama no nome da classe,
+        não em um objeto — porque o objeto ainda não existe:
+
+            table = DynTable.load("meus_dados", "sensor_readings")
+
+        Em C seria uma função factory como dyn_table_create_from_file().
+        Em Python, classmethod é o equivalente idiomático.
+
+        Parâmetros:
+            folder  → onde os arquivos estão (ex: ".", "meus_dados")
+            name    → nome da tabela (prefixo dos arquivos)
+
+        Lança FileNotFoundError se os arquivos não existirem.
+        """
+        import json
+        import os
+
+        base = os.path.join(folder, name)
+        schema_path = base + ".schema.json"
+        csv_path    = base + ".csv"
+
+        # Verifica que ambos existem antes de tentar ler
+        if not os.path.exists(schema_path):
+            raise FileNotFoundError(
+                f"Schema não encontrado: {schema_path}\n"
+                f"Certifique-se de ter chamado table.save('{folder}') antes."
+            )
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(
+                f"Dados não encontrados: {csv_path}\n"
+                f"Certifique-se de que o arquivo CSV não foi movido ou deletado."
+            )
+
+        # ── 1. Lê o SCHEMA ────────────────────────────────────
+        with open(schema_path, "r", encoding="utf-8") as f:
+            schema = json.load(f)
+
+        # Reconstrói a tabela com o nome e estado corretos
+        table = cls(schema["name"])
+        table._next_id = schema["next_id"]
+
+        # Mapeia string → DynType (ex: "FLOAT" → DynType.FLOAT)
+        # DynType[nome] funciona porque IntEnum suporta acesso por nome
+        for col_data in schema["columns"]:
+            dtype = DynType[col_data["dtype"]]
+            col   = DynColumn(
+                name=col_data["name"],
+                dtype=dtype,
+                nullable=col_data["nullable"],
+                locked=col_data["locked"],
+            )
+            table._columns[col.name] = col
+            table._col_order.append(col.name)
+
+        # ── 2. Lê os DADOS do CSV ─────────────────────────────
+        # Agora que o schema está carregado, sabemos o tipo de
+        # cada coluna — então podemos converter os valores corretamente.
+        with open(csv_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for raw_row in reader:
+                row_id     = int(raw_row["__id__"])
+                created_at = float(raw_row["__created_at__"])
+
+                # Cria a linha sem passar pelo new_row() para não
+                # incrementar _next_id nem aplicar lógica de tipo agora
+                row = DynRow(row_id=row_id, col_names=table._col_order)
+                row.created_at = created_at
+                table._rows[row_id] = row
+                table._row_order.append(row_id)
+
+                # Converte cada célula para o tipo correto do schema
+                for col_name in table._col_order:
+                    raw = raw_row.get(col_name, "__NULL__")
+
+                    if raw == "__NULL__":
+                        # Mantém como NULL (DynCell padrão já é NULL)
+                        continue
+
+                    col_def = table._columns[col_name]
+                    dtype   = col_def.dtype
+
+                    # Converte string CSV → tipo Python correto
+                    # Esta é a parte que o CSV sozinho não consegue fazer:
+                    # sem o schema, "23.7" seria string, não float.
+                    try:
+                        if dtype == DynType.INT:
+                            value = int(raw)
+                        elif dtype in (DynType.FLOAT, DynType.TIMESTAMP):
+                            value = float(raw)
+                        elif dtype == DynType.BOOL:
+                            value = raw.lower() in ("true", "1", "yes")
+                        elif dtype == DynType.BYTES:
+                            value = raw.encode("utf-8")
+                        else:  # STRING, AUTO, NULL
+                            value = raw
+
+                        # Usa o dtype do SCHEMA, não re-infere pelo valor.
+                        # Sem isso, um TIMESTAMP (float) seria re-classificado
+                        # como FLOAT pelo infer(), perdendo a formatação de data.
+                        row._data[col_name] = DynCell(dtype=dtype, value=value)
+                    except (ValueError, TypeError):
+                        # Se a conversão falhar, mantém como string
+                        row._data[col_name] = DynCell(dtype=DynType.STRING, value=raw)
+
+        return table
+
+    @classmethod
+    def load_or_create(cls, folder: str, name: str) -> "DynTable":
+        """
+        Tenta carregar uma tabela salva. Se não existir, cria uma nova vazia.
+
+        Ideal para o início de scripts e apps:
+            table = DynTable.load_or_create("dados", "sensor_readings")
+            # Se já existia → carrega com todos os dados
+            # Se é a primeira vez → começa do zero sem erro
+
+        É o padrão "abre ou cria" comum em bancos de dados.
+        """
+        try:
+            return cls.load(folder, name)
+        except FileNotFoundError:
+            return cls(name)
+
+    # ═══════════════════════════════════════════════════════════
     #  CLONAGEM
     # ═══════════════════════════════════════════════════════════
 

@@ -4,12 +4,16 @@ dyntable — tabela dinâmica para projetos IoT.
 Uso mínimo:
     from dyntable import DynTable, DynType
 
-    t = DynTable("leituras")
+    # Primeira execução: cria tabela nova
+    # Execuções seguintes: carrega do disco automaticamente
+    t = DynTable.load_or_create("dados", "sensor_readings")
+
     t.add_column("device_id", DynType.STRING)
     t.add_column("temperatura")        # tipo inferido automaticamente
 
     row = t.new_row(device_id="T01", temperatura=23.7)
-    print(t[row.id]["temperatura"])    # → 23.7
+
+    t.save("dados")                    # persiste para o próximo uso
 """
 
 from ._types import (
