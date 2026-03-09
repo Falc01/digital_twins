@@ -20,7 +20,7 @@ sua_pasta/
 │   ├── sensor_readings.csv
 │   └── sensor_readings.schema.json
 │
-├── app_v2.py
+├── app.py
 ├── setup_tabela.py
 ├── exemplo_iot_v3.py
 └── requirements.txt
@@ -124,7 +124,7 @@ Isso cria a pasta `dados/` com o `sensor_readings.csv` e o `sensor_readings.sche
 ### Passo 7 — Verificar a instalação
 
 ```cmd
-python exemplo_iot_v3.py
+python exemplo_iot.py
 ```
 
 Se tudo estiver correto, você verá a tabela impressa no terminal.
@@ -134,7 +134,7 @@ Se tudo estiver correto, você verá a tabela impressa no terminal.
 ### Passo 8 — Abrir a interface web
 
 ```cmd
-streamlit run app_v2.py
+streamlit run app.py
 ```
 
 O Streamlit abrirá automaticamente o navegador em `http://localhost:8501`. Se não abrir, acesse manualmente.
@@ -490,7 +490,7 @@ tabela.save("dados")
 
 ### O que o Streamlit faz automaticamente
 
-O `app_v2.py` já chama `load_or_create` ao iniciar e `save` após cada operação de escrita. Você não precisa se preocupar com isso na interface web — os dados são preservados automaticamente.
+O `app.py` já chama `load_or_create` ao iniciar e `save` após cada operação de escrita. Você não precisa se preocupar com isso na interface web — os dados são preservados automaticamente.
 
 ---
 
@@ -537,7 +537,7 @@ except FileNotFoundError as e:
 
 ## Usando a interface web
 
-Execute `streamlit run app_v2.py` e use o painel:
+Execute `streamlit run app.py` e use o painel:
 
 - **Barra lateral → Nova coluna:** nome, tipo e se é nullable
 - **Barra lateral → Nova linha:** campos aparecem dinamicamente para cada coluna
