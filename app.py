@@ -1,19 +1,16 @@
 """
-app_v2.py — Interface Streamlit para o DynTable
+app.py — Interface Streamlit para o DynTable
 ================================================
 Este arquivo é APENAS a camada visual.
 
 Toda lógica de negócio vive em:
-  config.py         → configurações (pasta, defaults)
+  config.py         → configurações (pasta, defaults, QGIS)
   table_manager.py  → criar, listar, deletar, salvar tabelas
   dyntable/         → operações dentro de cada tabela
-
-Se você quiser trocar o Streamlit por outro framework,
-você mantém config.py e table_manager.py intocados
-e só reescreve este arquivo.
+  qgis_bridge/      → integração com QGIS
 
 Execute com:
-    streamlit run app_v2.py
+    streamlit run app.py
 """
 
 import streamlit as st
@@ -85,6 +82,9 @@ st.markdown("""
   .section-title { font-size:0.7rem; color:#444; text-transform:uppercase;
                    letter-spacing:2px; margin:1rem 0 0.5rem; }
   .no-table { color:#444; text-align:center; padding:3rem; font-size:0.95rem; }
+  .qgis-btn button { background:#0a1a0a !important; border:1px solid #00aa55 !important;
+                     color:#00aa55 !important; font-weight:700 !important; }
+  .qgis-btn button:hover { border-color:#00ff88 !important; color:#00ff88 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -92,16 +92,13 @@ st.markdown("""
 #  ESTADO DA SESSÃO
 # ─────────────────────────────────────────────
 if "mgr" not in st.session_state:
-    # TableManager lê a pasta — descobre tabelas existentes automaticamente
     st.session_state.mgr = TableManager(PASTA_DADOS)
 
 if "active_table" not in st.session_state:
-    # Tenta abrir a tabela padrão definida em config.py
     mgr: TableManager = st.session_state.mgr
     if TABELA_PADRAO and mgr.exists(TABELA_PADRAO):
         st.session_state.active_table = mgr.get(TABELA_PADRAO)
     elif mgr.list_tables():
-        # Se não tem padrão, abre a primeira disponível
         st.session_state.active_table = mgr.get(mgr.list_tables()[0])
     else:
         st.session_state.active_table = None
@@ -283,10 +280,34 @@ with col_main:
 with st.sidebar:
     st.markdown('<p style="color:#00ff88;font-size:1.1rem;font-weight:800;font-family:Syne,sans-serif;">⚡ DynTable IoT</p>', unsafe_allow_html=True)
 
+    # ══ QGIS BRIDGE ════════════════════════════════════════
+    st.markdown('<p class="section-title">Visualização GIS</p>', unsafe_allow_html=True)
+
+    st.markdown('<div class="qgis-btn">', unsafe_allow_html=True)
+    if st.button("🗺 Abrir no QGIS", use_container_width=True, key="btn_open_qgis"):
+        try:
+            from qgis_bridge.launcher import launch_qgis
+            launch_qgis()
+            log("QGIS iniciado. Aguarde o carregamento.", "inf")
+        except FileNotFoundError as e:
+            log(str(e), "err")
+        except Exception as e:
+            log(f"Erro ao abrir QGIS: {e}", "err")
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="notif notif-inf" style="font-size:0.72rem;margin-top:4px">'
+        'O QGIS sincroniza automaticamente com o BD enquanto estiver aberto.'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
     # ══ GERENCIAR TABELAS ══════════════════════════════════
     st.markdown('<p class="section-title">Tabelas</p>', unsafe_allow_html=True)
 
-    # Lista todas as tabelas como botões de seleção
     all_tables = mgr.list_tables()
     if not all_tables:
         st.markdown('<div class="notif notif-inf" style="font-size:0.75rem">Nenhuma tabela ainda.</div>', unsafe_allow_html=True)

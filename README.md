@@ -1,32 +1,42 @@
 # DynTable IoT — Documentação Completa
 
-Tabela dinâmica em Python para projetos IoT: adicione colunas e linhas em qualquer momento, sem esquema fixo.
+Tabela dinâmica em Python para projetos IoT: adicione colunas e linhas em qualquer momento, sem esquema fixo. Integração em tempo real com QGIS para visualização geoespacial.
 
 ---
 
 ## Estrutura do projeto
 
-Antes de qualquer coisa, seus arquivos precisam estar organizados **exatamente assim**. A subpasta `dyntable` é obrigatória — sem ela o Python não encontra a biblioteca.
-
 ```
 sua_pasta/
 │
-├── dyntable/               ← SUBPASTA (não coloque os arquivos soltos!)
+├── dyntable/               ← biblioteca principal
 │   ├── __init__.py
 │   ├── _types.py
 │   └── _core.py
 │
-├── dados/                  ← criada automaticamente ao rodar setup_tabela.py
-│   ├── sensor_readings.csv
-│   └── sensor_readings.schema.json
+├── qgis_bridge/            ← integração com QGIS
+│   ├── __init__.py
+│   ├── layer_manager.py    → criar/recarregar camada IoT
+│   ├── watcher.py          → QFileSystemWatcher + debounce
+│   ├── project_manager.py  → criar/carregar .qgz
+│   └── launcher.py         → subprocess (abre o QGIS)
 │
-├── app.py
+├── dados/                  ← criada automaticamente
+│   ├── sensor_readings.csv
+│   ├── sensor_readings.schema.json
+│   ├── projeto_iot.qgz     ← criado na primeira abertura do QGIS
+│   └── basemap.tif         ← coloque aqui sua imagem de base
+│
+├── startup_script.py       ← injetado no QGIS via --code
+├── app.py                  ← interface Streamlit
+├── config.py               ← todas as configurações
+├── table_manager.py        → gerenciador de múltiplas tabelas
 ├── setup_tabela.py
-├── exemplo_iot_v3.py
+├── exemplo_iot.py
 └── requirements.txt
 ```
 
-> ⚠️ **Atenção:** Os arquivos `__init__.py`, `_types.py` e `_core.py` devem estar **dentro** da pasta `dyntable`, não na raiz do projeto.
+> ⚠️ **Atenção:** Os arquivos `__init__.py`, `_types.py` e `_core.py` devem estar **dentro** da pasta `dyntable`. Os arquivos do `qgis_bridge` devem estar **dentro** da pasta `qgis_bridge`.
 
 ---
 
@@ -39,13 +49,11 @@ sua_pasta/
 
 ### Passo 1 — Confirmar que o Python está funcionando
 
-Abra o terminal do VS Code e rode:
-
 ```cmd
 python --version
 ```
 
-Deve aparecer algo como `Python 3.12.x`. Se aparecer erro, veja a seção **Resolução de problemas** no final.
+Deve aparecer algo como `Python 3.12.x`.
 
 ---
 
@@ -55,89 +63,47 @@ Deve aparecer algo como `Python 3.12.x`. Se aparecer erro, veja a seção **Reso
 cd caminho\para\sua_pasta
 ```
 
-Por exemplo:
-```cmd
-cd C:\Users\joaof\Downloads\Unifacs\digital_twins\protipo_IoT_1_1_0
-```
-
-> Dica: no VS Code você pode abrir a pasta pelo menu **Arquivo → Abrir Pasta** e o terminal já abre no lugar certo.
-
 ---
 
-### Passo 3 — Criar o ambiente virtual
-
-O ambiente virtual isola os pacotes do projeto para não misturar com outros projetos no computador.
+### Passo 3 — Criar e ativar o ambiente virtual
 
 ```cmd
 python -m venv .venv
 ```
 
-Isso cria uma pasta `.venv` dentro do projeto. Ela não aparece no VS Code por padrão pois começa com ponto — isso é normal.
-
----
-
-### Passo 4 — Ativar o ambiente virtual
-
-**No terminal do VS Code (PowerShell):**
+**PowerShell:**
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-**No Prompt de Comando (cmd):**
+**Prompt de Comando:**
 ```cmd
 .venv\Scripts\activate.bat
 ```
 
-Quando ativado, o terminal mostra `(.venv)` no início da linha:
-```
-(.venv) PS C:\Users\joaof\...>
-```
-
-> Se aparecer erro de permissão no PowerShell, rode antes:
-> ```powershell
-> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-> ```
-> Depois tente ativar novamente.
-
 ---
 
-### Passo 5 — Instalar as dependências
+### Passo 4 — Instalar as dependências
 
 ```cmd
 pip install -r requirements.txt
 ```
 
-Isso instala o `streamlit`. O `dyntable` em si é puro Python, sem dependências externas.
-
 ---
 
-### Passo 6 — Criar a estrutura inicial da tabela
+### Passo 5 — Criar a estrutura inicial da tabela
 
 ```cmd
 python setup_tabela.py
 ```
 
-Isso cria a pasta `dados/` com o `sensor_readings.csv` e o `sensor_readings.schema.json`.
-
 ---
 
-### Passo 7 — Verificar a instalação
-
-```cmd
-python exemplo_iot.py
-```
-
-Se tudo estiver correto, você verá a tabela impressa no terminal.
-
----
-
-### Passo 8 — Abrir a interface web
+### Passo 6 — Abrir a interface web
 
 ```cmd
 streamlit run app.py
 ```
-
-O Streamlit abrirá automaticamente o navegador em `http://localhost:8501`. Se não abrir, acesse manualmente.
 
 ---
 
@@ -145,44 +111,20 @@ O Streamlit abrirá automaticamente o navegador em `http://localhost:8501`. Se n
 
 ### `python` não é reconhecido como comando
 
-O Python está instalado mas o Windows não sabe onde ele está. Abra o menu Iniciar, pesquise **"Editar variáveis de ambiente"**, clique em **Variáveis de Ambiente**, encontre `Path` em **Variáveis do sistema**, clique em **Editar** e adicione:
-
+Adicione ao `Path` do Windows:
 ```
-C:\Users\joaof\AppData\Local\Programs\Python\Python312\
-C:\Users\joaof\AppData\Local\Programs\Python\Python312\Scripts\
+C:\Users\<seu_usuario>\AppData\Local\Programs\Python\Python312\
+C:\Users\<seu_usuario>\AppData\Local\Programs\Python\Python312\Scripts\
 ```
-
-Substitua `Python312` pela sua versão. Feche e reabra o terminal.
-
-Alternativamente, use o terminal **dentro do VS Code** (`Ctrl + '`) — ele costuma encontrar o Python automaticamente.
-
----
-
-### Erro `Import "streamlit" could not be resolved` no VS Code
-
-Não é um erro real, é só o VS Code usando o Python errado para análise. O código roda normalmente. Para corrigir o aviso: `Ctrl + Shift + P` → `Python: Select Interpreter` → selecione a opção que mostra `.venv`.
-
----
 
 ### Erro `ModuleNotFoundError: No module named 'dyntable'`
 
-Os arquivos `__init__.py`, `_types.py` e `_core.py` estão soltos na pasta raiz em vez de dentro de uma subpasta `dyntable`. Crie a subpasta e mova os arquivos:
-
+Os arquivos estão soltos na raiz. Mova-os para dentro das subpastas corretas:
 ```cmd
 mkdir dyntable
 move __init__.py dyntable\
 move _types.py dyntable\
 move _core.py dyntable\
-```
-
----
-
-### O schema foi salvo como `sensor_readings_schema.json` (com underline)
-
-O código espera o nome `sensor_readings.schema.json` (com ponto). Renomeie:
-
-```cmd
-ren dados\sensor_readings_schema.json sensor_readings.schema.json
 ```
 
 ---
@@ -195,29 +137,20 @@ ren dados\sensor_readings_schema.json sensor_readings.schema.json
 from dyntable import DynTable, DynType
 ```
 
----
-
 ### Criando uma tabela
 
 ```python
 tabela = DynTable("sensor_readings")
 ```
 
----
-
 ### Adicionando colunas
 
-Colunas podem ser adicionadas **a qualquer momento**, mesmo com dados já inseridos. Linhas existentes recebem `NULL` automaticamente na nova coluna.
-
 ```python
-# Com tipo explícito
 tabela.add_column("device_id",     DynType.STRING)
 tabela.add_column("temperatura",   DynType.FLOAT)
 tabela.add_column("porta_aberta",  DynType.BOOL)
 tabela.add_column("registrado_em", DynType.TIMESTAMP)
-
-# Com tipo AUTO: o tipo é inferido na primeira vez que você inserir um valor
-tabela.add_column("pressao")   # tipo definido automaticamente
+tabela.add_column("pressao")   # tipo AUTO: inferido automaticamente
 ```
 
 **Tipos disponíveis:**
@@ -232,14 +165,9 @@ tabela.add_column("pressao")   # tipo definido automaticamente
 | `DynType.BYTES`     | `b"\x01\x02"`     | Dados binários brutos            |
 | `DynType.AUTO`      | (qualquer)        | Python detecta o tipo sozinho    |
 
----
-
 ### Inserindo linhas
 
-**Forma 1 — Kwargs direto (recomendado):**
 ```python
-import time
-
 row = tabela.new_row(
     device_id="sensor-T01",
     temperatura=23.7,
@@ -247,118 +175,20 @@ row = tabela.new_row(
 )
 ```
 
-**Forma 2 — Inserir vazia e preencher depois:**
-```python
-row = tabela.new_row()
-row["device_id"]   = "sensor-T01"
-row["temperatura"] = 23.7
-```
-
-**Forma 3 — Pelo ID, sem guardar a referência:**
-```python
-row = tabela.new_row()
-tabela.set(row.id, "temperatura", 21.5)
-```
-
----
-
 ### Lendo valores
 
 ```python
-# Pelo objeto row (se você tem a referência)
 temp = row["temperatura"]
-
-# Pelo ID (sem precisar da referência)
 temp = tabela.get(row_id=1, col="temperatura")
-
-# Pelo operador [] da tabela
 temp = tabela[1]["temperatura"]
 ```
 
----
-
-### Atualizando um valor
-
-```python
-row["temperatura"] = 25.0                    # pelo objeto
-tabela.set(row.id, "temperatura", 25.0)      # pelo ID
-```
-
----
-
-### Removendo colunas e linhas
-
-```python
-tabela.remove_column("coluna_antiga")
-tabela.delete_row(row_id=3)
-```
-
----
-
-### Renomeando coluna
-
-```python
-tabela.rename_column("temp", "temperature_c")
-```
-
----
-
-### Encadeamento de operações
-
-Todos os métodos de modificação retornam `self`, então você pode encadear:
-
-```python
-tabela.add_column("a").add_column("b").remove_column("c").rename_column("d", "e")
-```
-
----
-
-### Iterando sobre linhas
-
-```python
-for row in tabela:
-    print(row["device_id"], row["temperatura"])
-```
-
----
-
-### Verificando se um ID existe
-
-```python
-if 5 in tabela:
-    print("Linha 5 existe")
-```
-
----
-
 ### Filtrando linhas
 
-**Por valor exato:**
-```python
-resultados = tabela.filter(device_id="sensor-T01")
-```
-
-**Com condição (lambda):**
 ```python
 quentes = tabela.filter(temperatura=lambda v: v is not None and v > 25)
+sensor  = tabela.find_one(device_id="sensor-T01")
 ```
-
-**Múltiplas condições (AND):**
-```python
-matches = tabela.filter(
-    device_id="sensor-TP01",
-    temperatura=lambda v: v is not None and v > 20
-)
-```
-
-**Primeiro resultado:**
-```python
-sensor = tabela.find_one(device_id="sensor-T01")
-if sensor:
-    print(sensor["temperatura"])
-```
-
----
 
 ### Estatísticas de coluna
 
@@ -367,162 +197,35 @@ stats = tabela.column_stats("temperatura")
 # {'count': 3, 'nulls': 2, 'min': 21.3, 'max': 23.7, 'avg': 22.1}
 ```
 
----
-
 ### Exportando dados
 
-**Para arquivo CSV (exportação simples, sem schema):**
 ```python
 tabela.export_csv("dados.csv")
-```
-
-**Para string CSV (sem criar arquivo):**
-```python
 csv_texto = tabela.to_csv_string()
-```
-
-**Para lista de dicts Python:**
-```python
 registros = tabela.to_dicts()
-# [{'id': 1, 'created_at': '...', 'device_id': 'sensor-T01', ...}, ...]
-
-# Integração direta com pandas:
-import pandas as pd
-df = pd.DataFrame(tabela.to_dicts())
-```
-
----
-
-### Clonando a tabela
-
-```python
-copia = tabela.clone()
-copia_renomeada = tabela.clone("backup_readings")
-```
-
----
-
-### Representação e diagnóstico
-
-```python
-print(tabela)        # tabela formatada no terminal
-repr(tabela)         # resumo compacto
-len(tabela)          # número de linhas
-bool(tabela)         # False se vazia
 ```
 
 ---
 
 ## Persistência — salvar e carregar do disco
 
-Por padrão, a tabela existe apenas na memória RAM — fechar o terminal apaga tudo. Para manter os dados entre sessões, use `save()` e `load()`.
-
-### Como funciona
-
-A persistência usa **dois arquivos juntos**. O CSV sozinho não é suficiente porque ele guarda apenas os valores, perdendo os tipos das colunas, as regras de nullable e o próximo ID disponível. O schema.json completa o que falta:
+A persistência usa dois arquivos juntos:
 
 ```
 dados/
-  sensor_readings.csv             ← valores (legível no Excel/editor)
+  sensor_readings.csv             ← valores
   sensor_readings.schema.json     ← tipos, regras, próximo ID
 ```
 
-Os dois arquivos sempre têm o mesmo prefixo (o nome da tabela) e devem ficar na mesma pasta. Nunca mova um sem o outro.
-
----
-
-### `table.save(pasta)`
-
-Salva a tabela na pasta indicada. A pasta é criada automaticamente se não existir.
-
 ```python
-tabela.save("dados")       # salva em ./dados/
-```
-
-O CSV gerado é legível normalmente. Valores `NULL` aparecem como `__NULL__` para distinguir de strings vazias.
-
----
-
-### `DynTable.load(pasta, nome)`
-
-Carrega uma tabela salva anteriormente. Reconstrói tudo: colunas com os tipos corretos, linhas com os valores convertidos, próximo ID contínuo.
-
-```python
+tabela.save("dados")
 tabela = DynTable.load("dados", "sensor_readings")
-```
-
-Lança `FileNotFoundError` se os arquivos não existirem.
-
----
-
-### `DynTable.load_or_create(pasta, nome)`
-
-O método mais útil para o uso diário. Tenta carregar — se os arquivos não existirem ainda, cria uma tabela nova vazia sem erro.
-
-```python
-# Primeira execução: cria tabela nova
-# Execuções seguintes: carrega do disco com todos os dados
 tabela = DynTable.load_or_create("dados", "sensor_readings")
 ```
 
 ---
 
-### Padrão recomendado para scripts
-
-```python
-import time
-from dyntable import DynTable, DynType
-
-# Abre a tabela (ou cria se for a primeira vez)
-tabela = DynTable.load_or_create("dados", "leituras")
-
-if not tabela.col_count:
-    tabela.add_column("device_id", DynType.STRING)
-    tabela.add_column("temperatura", DynType.FLOAT)
-    tabela.add_column("lido_em", DynType.TIMESTAMP)
-
-tabela.new_row(device_id="T01", temperatura=23.7, lido_em=time.time())
-
-tabela.save("dados")
-```
-
----
-
-### O que o Streamlit faz automaticamente
-
-O `app.py` já chama `load_or_create` ao iniciar e `save` após cada operação de escrita. Você não precisa se preocupar com isso na interface web — os dados são preservados automaticamente.
-
----
-
 ## Tratamento de erros
-
-```python
-from dyntable import (
-    DynTable, DynType,
-    ColumnNotFoundError, RowNotFoundError,
-    DuplicateColumnError, TypeMismatchError, ColumnNameError,
-)
-
-tabela = DynTable("teste")
-tabela.add_column("temp", DynType.FLOAT)
-
-try:
-    tabela.add_column("temp")            # coluna já existe!
-except DuplicateColumnError as e:
-    print(f"Erro: {e}")
-
-try:
-    tabela.get(row_id=999, col="temp")   # ID não existe
-except RowNotFoundError as e:
-    print(f"Erro: {e}")
-
-try:
-    DynTable.load("dados", "nao_existe") # arquivos não encontrados
-except FileNotFoundError as e:
-    print(f"Erro: {e}")
-```
-
-**Tabela de exceções:**
 
 | Exceção                | Quando ocorre                                         |
 |------------------------|-------------------------------------------------------|
@@ -539,42 +242,171 @@ except FileNotFoundError as e:
 
 Execute `streamlit run app.py` e use o painel:
 
+- **Barra lateral → Visualização GIS:** abre o QGIS sincronizado
 - **Barra lateral → Nova coluna:** nome, tipo e se é nullable
-- **Barra lateral → Nova linha:** campos aparecem dinamicamente para cada coluna
-- **Aba Dados:** visualiza a tabela com filtro rápido e opção de deletar linhas
+- **Barra lateral → Nova linha:** campos aparecem dinamicamente
+- **Aba Dados:** visualiza a tabela com filtro rápido
 - **Aba Schema:** gerencia colunas (renomear, remover)
 - **Aba Estatísticas:** min, max, média para colunas numéricas
 - **Aba Exportar CSV:** baixa o arquivo ou visualiza o conteúdo
 
-Os dados são salvos automaticamente na pasta `dados/` após cada operação. Ao reabrir o Streamlit, a tabela é restaurada exatamente como estava.
+---
+
+## QGIS Bridge — Sincronização em tempo real
+
+O QGIS Bridge conecta o banco de dados IoT ao QGIS, mantendo o mapa atualizado automaticamente sempre que os dados mudam.
+
+### Como funciona
+
+```
+Usuário edita dado no Streamlit
+    → Streamlit salva CSV no disco
+        → QFileSystemWatcher detecta a mudança
+            → Debounce de 300ms (evita recargas múltiplas)
+                → PyQGIS recarrega a camada de pontos
+                    → Mapa atualiza preservando zoom e posição
+```
+
+Os dois processos (Streamlit e QGIS) são completamente independentes e se comunicam apenas pelo arquivo CSV no disco.
 
 ---
 
-## Exemplo completo — cenário IoT real com persistência
+### Pré-requisitos para o QGIS Bridge
+
+**1. QGIS 3.x instalado no Windows**
+
+Baixe em [qgis.org](https://qgis.org/). Versão recomendada: QGIS 3.28 LTR ou mais recente.
+
+**2. Colunas de coordenadas na tabela**
+
+A tabela usada no QGIS precisa ter duas colunas com os nomes definidos em `config.py`:
+
+```python
+QGIS_LAT_COLUMN: str = "latitude"   # padrão
+QGIS_LON_COLUMN: str = "longitude"  # padrão
+```
+
+Crie essas colunas no Streamlit antes de abrir o QGIS:
+
+```
+Barra lateral → Nova coluna → latitude  (FLOAT)
+Barra lateral → Nova coluna → longitude (FLOAT)
+```
+
+**3. Imagem de base (opcional)**
+
+Coloque um arquivo `basemap.tif` dentro da pasta `dados/`. Ele será carregado como camada raster na primeira abertura do QGIS. Se não existir, o QGIS abre sem basemap.
+
+---
+
+### Configuração em config.py
+
+```python
+# Caminho do executável do QGIS
+# Se None, o sistema detecta automaticamente em C:\Program Files\QGIS*
+QGIS_EXE_PATH: str | None = None
+
+# Arquivo de projeto (.qgz) — criado automaticamente se não existir
+QGIS_PROJECT_PATH: str = "dados/projeto_iot.qgz"
+
+# Imagem de base
+QGIS_BASEMAP_PATH: str = "dados/basemap.tif"
+
+# Colunas de coordenadas
+QGIS_LAT_COLUMN: str = "latitude"
+QGIS_LON_COLUMN: str = "longitude"
+
+# CRS (sistema de coordenadas) — padrão WGS84
+QGIS_CRS: str = "EPSG:4326"
+```
+
+Se o QGIS não abrir automaticamente, edite `QGIS_EXE_PATH` com o caminho completo:
+```python
+QGIS_EXE_PATH = r"C:\Program Files\QGIS 3.34\bin\qgis-bin.exe"
+```
+
+---
+
+### Abrindo o QGIS
+
+Clique em **"🗺 Abrir no QGIS"** na barra lateral do Streamlit.
+
+O que acontece:
+1. O launcher localiza o `qgis-bin.exe`
+2. Abre o QGIS com `startup_script.py` injetado via `--code`
+3. Se o `projeto_iot.qgz` já existir, ele é carregado
+4. Se não existir, é criado com o basemap e salvo
+5. A camada de pontos IoT é carregada do CSV
+6. O watcher inicia e fica monitorando o arquivo
+
+A partir daí, qualquer inserção, edição ou deleção feita no Streamlit aparece no QGIS automaticamente em até 300ms.
+
+---
+
+### Estrutura dos módulos do bridge
+
+| Arquivo                        | Roda em        | Responsabilidade                          |
+|-------------------------------|----------------|-------------------------------------------|
+| `qgis_bridge/launcher.py`     | Python normal  | Localiza QGIS e abre via subprocess       |
+| `startup_script.py`           | Python do QGIS | Ponto de entrada — amarra tudo            |
+| `qgis_bridge/project_manager.py` | Python do QGIS | Cria/carrega o arquivo .qgz            |
+| `qgis_bridge/layer_manager.py`  | Python do QGIS | Recarrega camada preservando zoom        |
+| `qgis_bridge/watcher.py`      | Python do QGIS | Monitora CSV com debounce                 |
+
+---
+
+### CRS e reprojeção
+
+O CRS padrão é **EPSG:4326** (WGS84), que usa latitude e longitude em graus decimais. Se seus dados usam outro sistema de coordenadas (UTM, por exemplo), altere `QGIS_CRS` em `config.py` para o EPSG correspondente. O QGIS reprojetará automaticamente para o CRS do projeto ao exibir as camadas.
+
+---
+
+### Solução de problemas — QGIS Bridge
+
+**QGIS não abre / executável não encontrado**
+
+Edite `QGIS_EXE_PATH` em `config.py` com o caminho exato do seu QGIS:
+```python
+QGIS_EXE_PATH = r"C:\Program Files\QGIS 3.34\bin\qgis-bin.exe"
+```
+
+**Camada não aparece no QGIS**
+
+Verifique se a tabela no Streamlit tem colunas com os nomes exatos definidos em `QGIS_LAT_COLUMN` e `QGIS_LON_COLUMN`, e se há linhas com valores válidos nessas colunas.
+
+**O mapa não atualiza após editar dados**
+
+O watcher monitora apenas o primeiro CSV encontrado na pasta `dados/` no momento em que o QGIS foi aberto. Se você criou uma nova tabela depois de abrir o QGIS, feche e reabra o QGIS pelo botão no Streamlit.
+
+**Pontos aparecem em posição errada**
+
+Confirme que os valores de latitude e longitude estão no formato correto para o CRS configurado. Para EPSG:4326, latitude deve estar entre -90 e 90 e longitude entre -180 e 180.
+
+---
+
+## Exemplo completo com coordenadas
 
 ```python
 import time
 from dyntable import DynTable, DynType
 
-leituras = DynTable.load_or_create("dados", "leituras_fabrica")
+leituras = DynTable.load_or_create("dados", "sensores_campo")
 
 if not leituras.col_count:
-    leituras.add_column("sensor_id", DynType.STRING, nullable=False)
-    leituras.add_column("lido_em",   DynType.TIMESTAMP)
+    leituras.add_column("sensor_id",  DynType.STRING, nullable=False)
+    leituras.add_column("latitude",   DynType.FLOAT)
+    leituras.add_column("longitude",  DynType.FLOAT)
+    leituras.add_column("lido_em",    DynType.TIMESTAMP)
+    leituras.add_column("temp_c",     DynType.FLOAT)
 
-if "temp_c" not in leituras._columns:
-    leituras.add_column("temp_c", DynType.FLOAT)
-leituras.new_row(sensor_id="TMP-01", lido_em=time.time(), temp_c=45.2)
+leituras.new_row(
+    sensor_id="TMP-01",
+    latitude=-12.9714,
+    longitude=-38.5014,
+    lido_em=time.time(),
+    temp_c=32.4
+)
 
-if "vibracao_hz" not in leituras._columns:
-    leituras.add_column("vibracao_hz", DynType.FLOAT)
-leituras.new_row(sensor_id="VIB-01", lido_em=time.time(), vibracao_hz=120.5)
-
-criticos = leituras.filter(temp_c=lambda v: v is not None and v > 40)
-for r in criticos:
-    print(f"ALERTA: {r['sensor_id']} está em {r['temp_c']} °C!")
-
-print(leituras)
 leituras.save("dados")
-print("Dados salvos em dados/leituras_fabrica.csv")
+# Abra o QGIS pelo Streamlit — o ponto aparecerá no mapa automaticamente
 ```

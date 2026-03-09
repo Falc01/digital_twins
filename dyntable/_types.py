@@ -218,7 +218,7 @@ class DynRow:
 
     @property
     def created_at_str(self) -> str:
-        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.created_at))
+        return time.strftime("%d/%m/%Y %H:%M:%S", time.localtime(self.created_at))
 
     def __repr__(self) -> str:
         vals = {col: cell.value for col, cell in self._data.items()}
