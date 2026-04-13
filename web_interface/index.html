@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DynTable Column Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">DynTable IoT</p>
+        <h1>Gerenciar colunas</h1>
+        <p class="subtitle">Criar, renomear e excluir colunas de uma tabela existente.</p>
+      </div>
+      <div class="status-panel" id="statusPanel"></div>
+    </header>
+
+    <section class="card">
+      <h2>Selecionar tabela</h2>
+      <div class="form-row">
+        <select id="tableSelect"></select>
+        <button id="refreshBtn">Atualizar</button>
+      </div>
+      <form id="createTableForm" class="form-inline">
+        <input type="text" id="newTableName" placeholder="Nova tabela" />
+        <button type="submit">Criar tabela</button>
+      </form>
+    </section>
+
+    <section class="card" id="tableInfoCard" hidden>
+      <h2>Dados da tabela</h2>
+      <div class="meta-grid">
+        <div><span>Nome</span><strong id="tableName"></strong></div>
+        <div><span>Colunas</span><strong id="tableColCount"></strong></div>
+        <div><span>Linhas</span><strong id="tableRowCount"></strong></div>
+      </div>
+      <button id="deleteTableBtn" class="danger">Excluir tabela</button>
+    </section>
+
+    <section class="card" id="columnsCard" hidden>
+      <h2>Colunas</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Nome</th><th>Tipo</th><th>Nullable</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="columnList"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="columnFormCard" hidden>
+      <h2>Adicionar coluna</h2>
+      <form id="addColumnForm" class="form-grid">
+        <label>
+          Nome da coluna
+          <input type="text" id="columnName" placeholder="ex: temperatura" />
+        </label>
+        <label>
+          Tipo
+          <select id="columnType"></select>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="columnNullable" checked />
+          Nullable
+        </label>
+        <button type="submit">Adicionar coluna</button>
+      </form>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
