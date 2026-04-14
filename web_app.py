@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request, send_from_directory, abort
 from config import PASTA_DADOS
 from table_manager import TableManager, TableNotFoundError, TableAlreadyExistsError
 from dyntable import DynType
+from qgis_bridge.launcher import launch_qgis
 
 app = Flask(__name__, static_folder="web_interface", static_url_path="")
 mgr = TableManager(PASTA_DADOS)
@@ -136,6 +137,15 @@ def rename_column(name, col_name):
         return jsonify({"renamed": {"old": col_name, "new": new_name}})
     except Exception as exc:
         return json_error(str(exc), 400)
+
+
+@app.route("/api/launch_qgis", methods=["POST"])
+def launch_qgis_route():
+    try:
+        launch_qgis()
+        return jsonify({"message": "QGIS launched"})
+    except Exception as exc:
+        return json_error(str(exc), 500)
 
 
 @app.errorhandler(400)

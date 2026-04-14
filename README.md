@@ -83,11 +83,6 @@ python setup_tabela.py
 
 # 4. Abrir interface
 streamlit run app.py
-
-# 5. Interface HTML/CSS/JS
-python web_app.py
-
-Abra no navegador: http://127.0.0.1:8502
 ```
 
 ---
