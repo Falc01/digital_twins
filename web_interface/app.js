@@ -15,6 +15,7 @@ const addColumnForm = document.getElementById("addColumnForm");
 const columnName = document.getElementById("columnName");
 const columnType = document.getElementById("columnType");
 const columnNullable = document.getElementById("columnNullable");
+const openQgisBtn = document.getElementById("openQgisBtn");
 
 let currentTable = null;
 
@@ -167,6 +168,15 @@ async function onDeleteTable() {
   }
 }
 
+async function onOpenQgis() {
+  try {
+    await requestJson("/api/launch_qgis", "POST");
+    showStatus("Abrindo QGIS...");
+  } catch (err) {
+    showStatus(err.message, "error");
+  }
+}
+
 refreshBtn.addEventListener("click", refreshTableList);
 createTableForm.addEventListener("submit", onCreateTable);
 addColumnForm.addEventListener("submit", onAddColumn);
@@ -175,5 +185,6 @@ deleteTableBtn.addEventListener("click", onDeleteTable);
 tableSelect.addEventListener("change", async () => {
   await loadTable(tableSelect.value);
 });
+openQgisBtn.addEventListener("click", onOpenQgis);
 
 loadTypes().then(loadTables).catch(err => showStatus(err.message, "error"));
