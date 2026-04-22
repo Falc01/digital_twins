@@ -1,1 +1,0 @@
-{"type": "FeatureCollection", "name": "spinola", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "features": [], "_meta": {"table": "spinola", "exported_at": "2026-04-13T20:41:36", "total_rows": 0, "exported_features": 0, "skipped_no_coords": 0, "lat_col": null, "lon_col": null}}
