@@ -1,18 +1,3 @@
-"""
-qgis_bridge
-===========
-Integração entre a matriz DynTable e o QGIS.
-
-Módulos que REQUEREM ambiente QGIS (importar apenas dentro do QGIS):
-  - watcher        (QFileSystemWatcher, QTimer)
-  - layer_manager  (qgis.core, qgis.utils)
-  - project_manager(qgis.core, qgis.utils)
-
-Módulos que rodam FORA do QGIS (seguros para importar em qualquer contexto):
-  - exporter       (sem dependências de Qt/QGIS)
-  - launcher       (subprocess — abre o QGIS)
-"""
-
 # Importações seguras (sem Qt/QGIS)
 from .exporter import (
     TableExporter,
@@ -25,6 +10,15 @@ from .exporter import (
     ExportResult,
 )
 from .launcher import launch_qgis, find_qgis_exe
+
+from .middleware import (
+    ExportPipeline,
+    build_default_pipeline,
+    GpkgWriter,
+    GeoJsonWriter,
+    CsvWriter,
+    DyndbReader,
+)
 
 # watcher, layer_manager e project_manager NÃO são importados aqui
 # porque dependem de qgis.core / qgis.PyQt — disponíveis só dentro do QGIS.

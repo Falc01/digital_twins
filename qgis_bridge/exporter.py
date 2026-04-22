@@ -16,6 +16,11 @@ Nenhuma dependência do QGIS aqui — este módulo roda fora do QGIS.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .middleware import ExportPipeline   # só para o type checker, sem import circular em runtime
+
 import csv
 import io
 import json
@@ -318,65 +323,57 @@ def export_all_tables(
 # ─────────────────────────────────────────────
 
 class TableExporter:
-    """
-    Exportador associado a uma única tabela.
-    Mantém os caminhos de saída e expõe refresh() para re-exportar.
-
-    Uso típico no startup_script:
-        exporter = TableExporter(table, output_dir="dados")
-        exporter.refresh()          # exporta imediatamente
-        # ... watcher chama exporter.refresh() a cada mudança
-    """
 
     def __init__(
         self,
         table_name: str,
         data_dir: str,
         output_dir: str | None = None,
+        pipeline: "ExportPipeline | None" = None,
         lat_hint: str | None = None,
         lon_hint: str | None = None,
         export_csv_files: bool = True,
         export_geojson_files: bool = True,
+        export_gpkg_files: bool = True,
     ) -> None:
-        self.table_name = table_name
-        self.data_dir = data_dir
-        self.output_dir = output_dir or data_dir
-        self.lat_hint = lat_hint
-        self.lon_hint = lon_hint
-        self.export_csv_files = export_csv_files
+        self.table_name        = table_name
+        self.data_dir          = data_dir
+        self.output_dir        = output_dir or data_dir
+        self._pipeline         = pipeline           # bug 1 corrigido
+        self.lat_hint          = lat_hint
+        self.lon_hint          = lon_hint
+        self.export_csv_files  = export_csv_files
         self.export_geojson_files = export_geojson_files
+        self.export_gpkg_files = export_gpkg_files  # bug 2 corrigido
 
-        self.csv_path = os.path.join(self.output_dir, f"{table_name}.csv")
+        self.csv_path     = os.path.join(self.output_dir, f"{table_name}.csv")
         self.geojson_path = os.path.join(self.output_dir, f"{table_name}.geojson")
+        self.gpkg_path    = os.path.join(self.output_dir, f"{table_name}.gpkg")
         self._last_export: float = 0.0
 
     def refresh(self) -> bool:
-        """
-        Re-exporta a tabela. Retorna True se bem-sucedido.
-        Chamado pelo watcher a cada mudança no .dyndb.
-        """
         try:
-            manager = TableManager(self.data_dir)
-            if not manager.exists(self.table_name):
-                print(f"[exporter] Tabela '{self.table_name}' não encontrada em {self.data_dir!r}")
-                return False
-
-            table = manager.get(self.table_name)
-
-            if self.export_csv_files:
-                export_csv(table, self.output_dir)
-
-            if self.export_geojson_files:
-                export_geojson(
-                    table,
-                    self.output_dir,
-                    lat_hint=self.lat_hint,
-                    lon_hint=self.lon_hint,
-                )
+            if self._pipeline:
+                self._pipeline.refresh(self.table_name, self.output_dir)
+            else:
+                manager = TableManager(self.data_dir)
+                if not manager.exists(self.table_name):
+                    print(f"[exporter] Tabela '{self.table_name}' não encontrada.")
+                    return False
+                table = manager.get(self.table_name)
+                if self.export_csv_files:
+                    export_csv(table, self.output_dir)
+                if self.export_geojson_files:
+                    export_geojson(table, self.output_dir,
+                                   lat_hint=self.lat_hint, lon_hint=self.lon_hint)
+                # bug 2 corrigido: export_gpkg_files agora é realmente usado
+                if self.export_gpkg_files:
+                    from .middleware import GpkgWriter, DyndbReader
+                    reader = DyndbReader(self.data_dir, self.lat_hint, self.lon_hint)
+                    GpkgWriter().write(reader.read(self.table_name), self.output_dir)
 
             self._last_export = time.time()
             return True
-
         except Exception as exc:
             print(f"[exporter] ERRO em refresh() para '{self.table_name}': {exc}")
             return False

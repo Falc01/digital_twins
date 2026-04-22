@@ -18,15 +18,30 @@ def _add_basemap(basemap_path: str, crs_str: str) -> None:
 
 def setup_project(project_path: str, basemap_path: str, crs_str: str) -> bool:
     project = QgsProject.instance()
+
     if os.path.exists(project_path):
         if project.fileName() != project_path:
             ok = project.read(project_path)
             if not ok:
                 print(f"[qgis_bridge] Falha ao carregar: {project_path}")
                 return False
+
+        # verifica se o basemap já está no projeto
+        basemap_name = os.path.basename(basemap_path)
+        layers_with_basemap = [
+            l for l in project.mapLayers().values()
+            if basemap_name in l.source()
+        ]
+        if not layers_with_basemap:
+            # projeto existe mas não tem o basemap — adiciona agora
+            print("[qgis_bridge] Basemap ausente no projeto existente, adicionando...")
+            _add_basemap(basemap_path, crs_str)
+            project.write()
+
         print(f"[qgis_bridge] Projeto carregado: {os.path.basename(project_path)}")
         return True
 
+    # criação do zero — comportamento original
     print("[qgis_bridge] Criando novo projeto...")
     os.makedirs(os.path.dirname(project_path), exist_ok=True)
     project.setCrs(QgsCoordinateReferenceSystem(crs_str))

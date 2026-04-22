@@ -25,37 +25,36 @@ from qgis.utils import iface
 
 
 class LayerManager:
-    """
-    Gerencia uma camada vetorial de pontos IoT no QGIS.
-
-    Parâmetros
-    ----------
-    layer_name   : nome da camada dentro do QGIS
-    project_path : caminho do .qgz (para auto-salvar)
-    geojson_path : caminho do GeoJSON gerado pelo exporter (preferido)
-    csv_path     : caminho do CSV (fallback se GeoJSON não existir)
-    lat_col      : coluna de latitude (necessário apenas para CSV)
-    lon_col      : coluna de longitude (necessário apenas para CSV)
-    crs_str      : CRS string (padrão "EPSG:4326")
-    """
-
     def __init__(
         self,
         layer_name: str,
         project_path: str,
+        # opção 1: paths explícitos (compatibilidade legada)
         geojson_path: str | None = None,
         csv_path: str | None = None,
+        gpkg_path: str | None = None,   # novo — suporte a .gpkg
+        # opção 2: data_dir + table_name (novo, para startup_script)
+        data_dir: str | None = None,
+        table_name: str | None = None,
         lat_col: str = "latitude",
         lon_col: str = "longitude",
         crs_str: str = "EPSG:4326",
     ) -> None:
         self._layer_name   = layer_name
         self._project_path = project_path
-        self._geojson_path = geojson_path
-        self._csv_path     = csv_path
         self._lat_col      = lat_col
         self._lon_col      = lon_col
         self._crs_str      = crs_str
+
+        # resolve paths automaticamente se data_dir+table_name fornecidos
+        if data_dir and table_name:
+            self._geojson_path = os.path.join(data_dir, f"{table_name}.geojson")
+            self._csv_path     = os.path.join(data_dir, f"{table_name}.csv")
+            self._gpkg_path    = os.path.join(data_dir, f"{table_name}.gpkg")
+        else:
+            self._geojson_path = geojson_path
+            self._csv_path     = csv_path
+            self._gpkg_path    = gpkg_path
 
     # ─────────────────────────────────────────
     #  API pública
@@ -108,32 +107,25 @@ class LayerManager:
         """Retorna o número de features na camada ativa (0 se não existir)."""
         layer = self.get_layer()
         return layer.featureCount() if layer else 0
+    
+    def load_if_missing(self) -> None:
+        if self.get_layer() is None:
+            print(f"[layer_manager] '{self._layer_name}' ausente, carregando...")
+            self.reload()
+        else:
+            print(f"[layer_manager] '{self._layer_name}' já presente no projeto, mantendo.")
 
     # ─────────────────────────────────────────
     #  Internos
     # ─────────────────────────────────────────
-
-    def _pick_data_source(self) -> str | None:
-        """
-        Escolhe a fonte de dados disponível na ordem de preferência:
-        1. GeoJSON (se existir)
-        2. CSV     (se existir)
-        """
+    
+    def _pick_data_source(self):
+        if self._gpkg_path and os.path.exists(self._gpkg_path):
+            return self._gpkg_path    # prioridade 1
         if self._geojson_path and os.path.exists(self._geojson_path):
-            return self._geojson_path
+            return self._geojson_path  # prioridade 2
         if self._csv_path and os.path.exists(self._csv_path):
-            return self._csv_path
-        return None
-
-    def _build_layer(self, data_path: str) -> QgsVectorLayer | None:
-        ext = os.path.splitext(data_path)[1].lower()
-
-        if ext == ".geojson":
-            return self._build_geojson_layer(data_path)
-        if ext == ".csv":
-            return self._build_csv_layer(data_path)
-
-        print(f"[layer_manager] Formato não suportado: {ext}")
+            return self._csv_path      # prioridade 3
         return None
 
     def _build_geojson_layer(self, path: str) -> QgsVectorLayer | None:
@@ -155,6 +147,27 @@ class LayerManager:
             print(f"[layer_manager] CSV inválido. URI: {uri}")
             return None
         return layer
+
+    def _build_gpkg_layer(self, path):
+        # o provider do QGIS para .gpkg é "ogr", igual ao GeoJSON
+        # mas precisa especificar qual tabela dentro do arquivo
+        uri = f"{path}|layername={self._layer_name}"
+        layer = QgsVectorLayer(uri, self._layer_name, "ogr")
+        if not layer.isValid():
+            # fallback sem layername (caso o nome da camada interna seja diferente)
+            layer = QgsVectorLayer(path, self._layer_name, "ogr")
+        if not layer.isValid():
+            print(f"[layer_manager] GeoPackage inválido: {path}")
+            return None
+        return layer
+
+    def _build_layer(self, data_path):
+        ext = os.path.splitext(data_path)[1].lower()
+        if ext == ".gpkg":    return self._build_gpkg_layer(data_path)
+        if ext == ".geojson": return self._build_geojson_layer(data_path)
+        if ext == ".csv":     return self._build_csv_layer(data_path)
+        print(f"[layer_manager] Formato não suportado: {ext}")
+        return None
 
     def _remove_existing_layer(self) -> None:
         project = QgsProject.instance()

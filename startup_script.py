@@ -14,7 +14,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from config import (
-    PASTA_DADOS,
+    DATA_DIR,
     QGIS_PROJECT_PATH,
     QGIS_BASEMAP_PATH,
     QGIS_LAT_COLUMN,
@@ -33,8 +33,6 @@ from qgis_bridge.exporter import TableExporter
 from qgis_bridge.layer_manager import LayerManager
 from qgis_bridge.watcher import MultiTableWatcher
 from qgis_bridge.middleware import build_default_pipeline
-
-DATA_DIR = os.path.join(PROJECT_ROOT, PASTA_DADOS)
 
 setup_project(QGIS_PROJECT_PATH, QGIS_BASEMAP_PATH, QGIS_CRS)
 
@@ -86,7 +84,7 @@ def _setup_table(table_name: str):
         crs_str=QGIS_CRS,
     )
 
-    layer_mgr.load_if_missing()
+    layer_mgr.load_if_missing()   # ← agora é chamado de verdade
 
     _multi_watcher.add(
         dyndb_path=dyndb_path,

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "name": "sensor_readings", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "features": [], "_meta": {"table": "sensor_readings", "exported_at": "2026-04-22T09:25:38", "total_rows": 2, "exported_features": 0, "skipped_no_coords": 0, "lat_col": null, "lon_col": null}}

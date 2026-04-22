@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+from .exporter import detect_coordinate_columns
 
 _LAT_CANDIDATES = {"lat", "latitude", "lat_grau", "y", "coord_y", "geo_lat"}
 _LON_CANDIDATES = {"lon", "long", "longitude", "lng", "lon_grau", "x", "coord_x", "geo_lon"}
@@ -31,25 +32,6 @@ class TableData:
     rows: list[RowData]
     lat_col: str | None = None
     lon_col: str | None = None
-
-
-def detect_coordinate_columns(
-    column_names: list[str],
-    lat_hint: str | None = None,
-    lon_hint: str | None = None,
-) -> tuple[str | None, str | None]:
-    names_lower = {n.lower(): n for n in column_names}
-
-    def _pick(candidates: set[str], hint: str | None) -> str | None:
-        if hint and hint in column_names:
-            return hint
-        for cand in candidates:
-            if cand in names_lower:
-                return names_lower[cand]
-        return None
-
-    return _pick(_LAT_CANDIDATES, lat_hint), _pick(_LON_CANDIDATES, lon_hint)
-
 
 class BaseReader(ABC):
     @abstractmethod
@@ -89,7 +71,7 @@ class DyndbReader(BaseReader):
         from table_manager import TableManager
         table = TableManager(self._data_dir).get(table_name)
         lat_col, lon_col = detect_coordinate_columns(
-            table.column_names, self._lat_hint, self._lon_hint
+            table, self._lat_hint, self._lon_hint
         )
         col_types = {col.name: col.dtype.name for col in table.columns}
         rows = [
