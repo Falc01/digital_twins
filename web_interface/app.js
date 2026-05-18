@@ -16,6 +16,9 @@ const columnName = document.getElementById("columnName");
 const columnType = document.getElementById("columnType");
 const columnNullable = document.getElementById("columnNullable");
 const openQgisBtn = document.getElementById("openQgisBtn");
+const uploadForm = document.getElementById("uploadForm");
+const uploadTableName = document.getElementById("uploadTableName");
+const fileInput = document.getElementById("fileInput");
 
 let currentTable = null;
 
@@ -177,6 +180,37 @@ async function onOpenQgis() {
   }
 }
 
+async function onUploadFile(event) {
+  event.preventDefault();
+  const file = fileInput.files[0];
+  const tableName = uploadTableName.value.trim();
+  
+  if (!file) return showStatus("Selecione um arquivo para upload.", "error");
+  if (!tableName) return showStatus("Digite o nome da tabela.", "error");
+  
+  showStatus(`Enviando e processando ${file.name}...`);
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("table_name", tableName);
+  
+  try {
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+    
+    showStatus(data.message);
+    fileInput.value = "";
+    uploadTableName.value = "";
+    await refreshTableList();
+  } catch (err) {
+    showStatus(err.message, "error");
+  }
+}
+
 refreshBtn.addEventListener("click", refreshTableList);
 createTableForm.addEventListener("submit", onCreateTable);
 addColumnForm.addEventListener("submit", onAddColumn);
@@ -186,5 +220,8 @@ tableSelect.addEventListener("change", async () => {
   await loadTable(tableSelect.value);
 });
 openQgisBtn.addEventListener("click", onOpenQgis);
+if(uploadForm) {
+  uploadForm.addEventListener("submit", onUploadFile);
+}
 
 loadTypes().then(loadTables).catch(err => showStatus(err.message, "error"));

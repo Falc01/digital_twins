@@ -41,7 +41,7 @@ def launch_qgis(
             project_path = None
 
     startup_script = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.path.dirname(os.path.abspath(__file__)),
         "startup_script.py"
     )
     if not os.path.exists(startup_script):

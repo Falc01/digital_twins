@@ -12,8 +12,9 @@ import sqlite3
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(_HERE))
 
-from qgis_bridge.middleware import GpkgWriter, TableData, RowData
-from dyntable import DynType
+from src.qgis.data.gpkg_writer import GpkgWriter
+from src.qgis.data.models import TableData, RowData
+from src.dyntable.data._core import DynType
 
 def test_gpkg_writer(tmp_path):
     writer = GpkgWriter(srid=4326)

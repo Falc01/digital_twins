@@ -18,7 +18,7 @@ sys.modules['qgis'] = MagicMock()
 sys.modules['qgis.core'] = MagicMock()
 sys.modules['qgis.utils'] = MagicMock()
 
-from qgis_bridge.layer_manager import LayerManager
+from src.qgis.data.layer_manager import LayerManager
 
 def test_layer_manager_gpkg_source(tmp_path):
     data_dir = str(tmp_path)
@@ -39,7 +39,7 @@ def test_layer_manager_gpkg_source(tmp_path):
     print("[OK] LayerManager usa GPKG corretamente como fonte.")
 
     # Testando o mock do build_gpkg_layer
-    with patch("qgis_bridge.layer_manager.QgsVectorLayer") as mock_qgs_layer:
+    with patch("src.qgis.data.layer_manager.QgsVectorLayer") as mock_qgs_layer:
         mock_instance = MagicMock()
         mock_instance.isValid.return_value = True
         mock_qgs_layer.return_value = mock_instance

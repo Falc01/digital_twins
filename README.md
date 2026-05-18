@@ -1,140 +1,100 @@
-# DynTable IoT
+# DynTable IoT 2.0.0
 
-Tabela dinâmica para projetos IoT: colunas e linhas criadas em runtime,
-sem esquema fixo. Motor interno em matriz n×m (Python puro). Integração
-em tempo real com QGIS. Interface web via Streamlit.
+Uma biblioteca e ecossistema modular para gerenciamento de dados IoT com suporte a tabelas dinâmicas (sem esquema fixo) e integração geoespacial de alta performance com o QGIS.
 
----
-
-## Estrutura de pastas
-
-```
-projeto/
-│
-├── app.py                      ← boot do Streamlit (só config + despacho)
-├── config.py                   ← todas as configurações (pasta, QGIS, limites)
-├── table_manager.py            ← criar, listar, salvar, deletar tabelas
-├── setup_tabela.py             ← roda 1× para criar estrutura inicial
-├── exemplo_iot.py              ← exemplos de uso da biblioteca
-├── startup_script.py           ← injetado no QGIS via --code
-├── requirements.txt
-│
-├── dyntable/                   ← biblioteca de dados
-│   ├── __init__.py
-│   ├── _matrix.py              ← MatrixStore: grade n×m em Python puro
-│   ├── _core.py                ← DynTable + DynRow (view sobre a matrix)
-│   └── _types.py               ← DynType, DynCell, DynColumn, exceções
-│
-├── ui/                         ← camada de apresentação Streamlit
-│   ├── __init__.py
-│   ├── main.py                 ← render_app() e toda a lógica de UI
-│   └── styles.py               ← CSS, type_badge(), TYPE_COLORS
-│
-├── qgis_bridge/                ← integração QGIS (só launcher roda fora)
-│   ├── __init__.py
-│   ├── launcher.py             ← abre o QGIS via subprocess
-│   ├── project_manager.py      ← cria/carrega o .qgz     ⚠ roda no QGIS
-│   ├── layer_manager.py        ← recarrega camada IoT     ⚠ roda no QGIS
-│   └── watcher.py              ← QFileSystemWatcher       ⚠ roda no QGIS
-│
-└── dados/                      ← criada automaticamente
-    ├── <tabela>.dyndb           ← pickle: matrix + schema + IDs (1 arquivo/tabela)
-    ├── projeto_iot.qgz          ← criado na primeira abertura do QGIS
-    └── basemap.tif              ← imagem de base para o mapa (opcional)
-```
+Desenvolvido sob rígidas diretrizes de **Pure Python Core** (sem dependências pesadas como Pandas ou NumPy no núcleo) e **QGIS Isolation** (acoplamento fraco e reativo via Middleware).
 
 ---
 
-## Camadas e responsabilidades
+## 🏗 Estrutura do Projeto
+
+O projeto segue uma arquitetura limpa e orientada a domínios:
 
 ```
-app.py          →  boot: set_page_config + CSS + render_app()
-  │
-  ├─ ui/styles.py   →  CSS global e badges de tipo
-  └─ ui/main.py     →  toda lógica Streamlit (abas, sidebar, estado)
-       │
-       ├─ config.py          →  constantes e caminhos
-       └─ table_manager.py   →  gerencia arquivos .dyndb na pasta dados/
-            │
-            └─ dyntable/
-                 ├─ _core.py     →  DynTable · DynRow (view sem cópia de dados)
-                 ├─ _matrix.py   →  MatrixStore: list[list[Any]] n×m
-                 └─ _types.py    →  tipos, células, colunas, exceções
-                      │
-                      └─ dados/*.dyndb   →  pickle binário (sem JSON separado)
+prototipo_IoT_2.0.0/
+│
+├── .gitignore                   ← Exclui arquivos gerados (.dyndb, .gpkg, .qgz)
+├── requirements.txt             ← Dependências leves (Flask, openpyxl, etc.)
+├── README.md
+│
+├── src/
+│   ├── dyntable/                ← Core da Matriz Dinâmica (Pure Python)
+│   │   ├── logic/
+│   │   │   └── ingestors.py     ← Ingestor de planilhas Excel (Strategy Pattern)
+│   │   └── data/
+│   │       ├── _core.py         ← DynTable e DynRow (Views de dados)
+│   │       ├── _matrix.py       ← MatrixStore (Estrutura de dados n×m)
+│   │       └── _types.py        ← Sistema de tipos em runtime
+│   │
+│   ├── qgis/                    ← QGIS Bridge (Acoplamento Fraco)
+│   │   ├── entry/
+│   │   │   ├── launcher.py      ← Gerenciador de subprocesso do QGIS
+│   │   │   └── startup_script.py ← Código Python injetado em runtime no QGIS
+│   │   ├── logic/
+│   │   │   ├── project_manager.py ← Setup e salvamento de projeto (.qgz)
+│   │   │   └── watcher.py       ← Monitoramento de mudanças nos dados (.dyndb)
+│   │   └── data/
+│   │       ├── exporter.py      ← Exportador da DynTable para GeoPackage (.gpkg)
+│   │       └── layer_manager.py ← Manipulador de camadas vetoriais
+│   │
+│   └── web/                     ← Backend Flask
+│       └── entry/
+│           └── web_app.py       ← Servidor e rotas da API REST
+│
+├── web_interface/               ← Frontend (Vanilla HTML, CSS, JavaScript)
+│   ├── index.html               ← Painel de Controle e Upload
+│   ├── styles.css               ← Interface moderna de alta estética
+│   └── app.js                   ← Lógica assíncrona cliente
+│
+├── shared/
+│   └── config.py                ← Configurações globais e caminhos absolutos
+│
+└── infra/dados/                 ← DataLake Local
+    ├── dados_temperatura_salvador_pelourinho.xlsx ← Planilha de Carga
+    └── pelourinho_recortado.tif  ← Basemap Raster do Pelourinho (EPSG:31984)
 ```
 
 ---
 
-## Instalação
+## ⚡ Camadas e Princípios Arquiteturais
 
+### 1. Pure Python Core
+A biblioteca `dyntable` armazena e manipula a matriz de dados utilizando exclusivamente as estruturas nativas do Python. Isso garante velocidade máxima de execução, portabilidade e elimina qualquer overhead de pacotes científicos pesados.
+
+### 2. Ingestor Estratégico & Geolocalização Dinâmica
+O `ExcelIngestor` realiza a carga de planilhas heterogêneas utilizando a biblioteca nativa `openpyxl`.
+* **Carga Aditiva:** Colunas novas criam automaticamente novas dimensões na matriz dinâmica.
+* **Espalhamento no Pelourinho:** Se a planilha não possuir dados de satélite, o ingestor automaticamente distribui os registros de forma alternada (Round-Robin) entre 5 coordenadas geográficas precisas localizadas dentro dos limites do raster `pelourinho_recortado.tif` (EPSG:31984).
+
+### 3. Isolamento do QGIS (QGIS Isolation)
+A ponte de integração não acopla o QGIS diretamente ao núcleo da aplicação. 
+* O QGIS apenas "consome" os GeoPackages exportados.
+* A sincronização em tempo real é feita de forma reativa: a interface salva em `.dyndb` (Pickle), o `watcher.py` (rodando no loop do QGIS) detecta o arquivo, recria o `.gpkg` local e atualiza a camada de exibição preservando a posição e zoom do usuário.
+
+---
+
+## 🚀 Como Executar o Projeto
+
+### 1. Preparar o Ambiente
+Crie um ambiente virtual e instale as dependências leves:
 ```bash
-# 1. Ambiente virtual
 python -m venv .venv
-.venv\Scripts\activate          # Windows PowerShell
+.venv\Scripts\activate   # Windows
 # ou
-source .venv/bin/activate       # Linux / macOS
+source .venv/bin/activate # Linux/macOS
 
-# 2. Dependências
 pip install -r requirements.txt
-
-# 3. Criar tabela inicial
-python setup_tabela.py
-
-# 4. Abrir interface
-streamlit run app.py
 ```
 
----
-
-## Uso rápido
-
-```python
-from dyntable import DynTable, DynType
-
-t = DynTable.load_or_create("dados", "leituras")
-
-t.add_column("device_id",  DynType.STRING)
-t.add_column("temperatura", DynType.FLOAT)
-
-row = t.new_row(device_id="sensor-T01", temperatura=23.7)
-
-print(t[row.id]["temperatura"])   # 23.7
-print(t._store)                   # MatrixStore(1×2, cols=['device_id', 'temperatura'])
-
-t.save("dados")                   # → dados/leituras.dyndb  (pickle, sem JSON)
+### 2. Iniciar o Servidor Web
+Rode o backend Flask:
+```bash
+python src/web/entry/web_app.py
 ```
+O console exibirá o endereço `http://127.0.0.1:8502`.
 
----
-
-## Formato de persistência
-
-Cada tabela é um único arquivo `.dyndb` — um pickle do objeto `DynTable`
-completo, incluindo a grade `n×m` (`MatrixStore`), os metadados de coluna
-e os IDs de linha.
-
-```
-dados/
-  leituras.dyndb          ← tabela "leituras"
-  alertas.dyndb           ← tabela "alertas"
-```
-
-Não há CSV separado nem schema.json. O `TableManager` descobre as tabelas
-listando os arquivos `*.dyndb` na pasta configurada.
-
----
-
-## QGIS Bridge
-
-O bridge conecta o banco ao QGIS para visualização geoespacial em tempo real.
-
-```
-Streamlit salva .dyndb
-  → to_csv_string() exporta CSV temporário
-    → QFileSystemWatcher detecta mudança (debounce 300 ms)
-      → LayerManager recarrega camada preservando zoom
-```
-
-Abrir pelo botão **🗺 Abrir no QGIS** na barra lateral do Streamlit.
-Configure o executável em `config.py` → `QGIS_EXE_PATH` se a detecção
-automática falhar.
+### 3. Painel de Controle
+* Acesse `http://127.0.0.1:8502` no navegador.
+* Faça o upload da planilha contida em `infra/dados/dados_temperatura_salvador_pelourinho.xlsx`.
+* Veja a matriz de dados ser populada instantaneamente.
+* Clique em **"Abrir no QGIS"**. O lançador irá procurar o seu executável local do QGIS, gerar um projeto `.qgz` zerado, carregar o mapa base do Pelourinho e plotar os 5 sensores virtuais com todos os seus dados correlacionados!

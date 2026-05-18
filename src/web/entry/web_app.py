@@ -1,15 +1,20 @@
 import re
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, PROJECT_ROOT)
 
 from flask import Flask, jsonify, request, send_from_directory, abort
+import tempfile
+from werkzeug.utils import secure_filename
+from src.dyntable.logic.ingestors import IngestorFactory
 from shared.config import PASTA_DADOS
 from src.dyntable.logic.table_manager import TableManager, TableNotFoundError, TableAlreadyExistsError
 from src.dyntable.data._core import DynType
 from src.qgis.entry.launcher import launch_qgis
 
-app = Flask(__name__, static_folder="web_interface", static_url_path="")
+STATIC_DIR = os.path.join(PROJECT_ROOT, "web_interface")
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="")
 mgr = TableManager(PASTA_DADOS)
 
 INVALID_NAME_RE = re.compile(r'[<>:"/\\|?*\x00-\x1F]')
@@ -150,6 +155,39 @@ def launch_qgis_route():
         return jsonify({"message": "QGIS launched"})
     except Exception as exc:
         return json_error(str(exc), 500)
+
+
+@app.route("/api/upload", methods=["POST"])
+def upload_file():
+    if 'file' not in request.files:
+        return json_error("Nenhum arquivo enviado", 400)
+    file = request.files['file']
+    if file.filename == '':
+        return json_error("Nenhum arquivo selecionado", 400)
+        
+    table_name = request.form.get("table_name", "").strip()
+    if not table_name:
+        table_name = "sensor_readings"
+        
+    validate_name(table_name)
+    
+    try:
+        # Salva o arquivo temporariamente
+        filename = secure_filename(file.filename)
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, filename)
+        file.save(file_path)
+        
+        # Chama a factory do ingestor
+        IngestorFactory.process_file(file_path, table_name, mgr)
+        
+        # Apaga o arquivo temporário
+        os.remove(file_path)
+        
+        return jsonify({"message": f"Arquivo {filename} ingerido com sucesso na tabela {table_name}"}), 200
+    except Exception as exc:
+        return json_error(str(exc), 500)
+
 
 
 @app.errorhandler(400)

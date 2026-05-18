@@ -6,11 +6,11 @@ import struct
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from table_manager import TableManager
-from qgis_bridge.exporter import detect_coordinate_columns
+from src.dyntable.logic.table_manager import TableManager
+from src.qgis.data.exporter import detect_coordinate_columns
 
 def main():
-    data_dir = os.path.join(project_root, 'dados')
+    data_dir = os.path.join(project_root, 'infra', 'dados')
     manager = TableManager(data_dir)
     
     if not manager.exists('sensor_readings'):
@@ -47,7 +47,7 @@ def main():
         lon_in_bounds = TIF_LON_MIN <= lon <= TIF_LON_MAX
         
         if lat_in_bounds and lon_in_bounds:
-            print("  [✓] Ponto está DENTRO do Bounding Box do raster.")
+            print("  [OK] Ponto está DENTRO do Bounding Box do raster.")
         else:
             print("  [x] Ponto está FORA do Bounding Box do raster!")
             if not lat_in_bounds:
@@ -70,7 +70,7 @@ def main():
         if unpacked[2] != lon or unpacked[3] != lat:
             print("  [!] ALERTA: A ordem no binário WKB foi invertida!")
         else:
-            print("  [✓] A ordem no WKB está correta (X=Longitude, Y=Latitude).")
+            print("  [OK] A ordem no WKB está correta (X=Longitude, Y=Latitude).")
         print("")
 
 if __name__ == '__main__':

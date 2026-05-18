@@ -20,6 +20,21 @@
       </div>
     </header>
 
+    <section class="card" id="uploadCard">
+      <h2>Ingestão de Dados (DataLake)</h2>
+      <form id="uploadForm" class="form-grid">
+        <label>
+          Nome da Tabela:
+          <input type="text" id="uploadTableName" placeholder="Ex: leituras_sensor" required />
+        </label>
+        <label>
+          Arquivo (.xlsx, .csv):
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" required />
+        </label>
+        <button type="submit">Fazer Upload</button>
+      </form>
+    </section>
+
     <section class="card">
       <h2>Selecionar tabela</h2>
       <div class="form-row">
