@@ -39,6 +39,7 @@ services:
       - DEBUG=1
     volumes:
       - ./infra/dados:/infra/dados
+      - ./qgis_integration:/qgis_integration
     # Porta exposta internamente para o Nginx.
     expose:
       - "80"
