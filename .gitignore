@@ -28,3 +28,8 @@ infra/dados/*.dyndb
 infra/dados/*.gpkg
 infra/dados/*.csv
 infra/dados/*.geojson
+infra/dados/status.json
+
+# Pastas Excluídas
+arquivos_velhos/
+teste_server/
