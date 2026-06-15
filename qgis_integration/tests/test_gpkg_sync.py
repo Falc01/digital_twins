@@ -8,6 +8,14 @@ import unittest
 # Adiciona o diretório qgis_integration e qgis_bridge ao path para importar gpkg_sync
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _QGIS_INTEGRATION = os.path.abspath(os.path.join(_HERE, ".."))
+_WORKSPACE = os.path.abspath(os.path.join(_QGIS_INTEGRATION, ".."))
+_BACKEND_SRC = os.path.join(_WORKSPACE, "backend", "src")
+_BACKEND = os.path.join(_WORKSPACE, "backend")
+
+if _BACKEND not in sys.path:
+    sys.path.insert(0, _BACKEND)
+if _BACKEND_SRC not in sys.path:
+    sys.path.insert(0, _BACKEND_SRC)
 if _QGIS_INTEGRATION not in sys.path:
     sys.path.insert(0, _QGIS_INTEGRATION)
 
