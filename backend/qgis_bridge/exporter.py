@@ -219,19 +219,28 @@ def save_to_gpkg(gpkg_path: str, table: DynTable, crs: str = QGIS_CRS) -> str:
         skipped_no_coords = 0
         min_x = min_y = max_x = max_y = None
 
-        for row in table:
+        # Coordenadas fixas dos 5 sensores do Pelourinho para Fallback Espacial
+        PELOURINHO_COORDS = [
+            (-12.9745, -38.5120),  # Sensor 1
+            (-12.9745, -38.5085),  # Sensor 2
+            (-12.9735, -38.5102),  # Sensor 3
+            (-12.9725, -38.5120),  # Sensor 4
+            (-12.9725, -38.5085),  # Sensor 5
+        ]
+
+        for idx, row in enumerate(table):
             lat = row[lat_col] if lat_col else None
             lon = row[lon_col] if lon_col else None
             if lat is None or lon is None:
-                skipped_no_coords += 1
-                geom_blob = None
-            else:
-                wkb = _wkb_point(float(lon), float(lat))
-                geom_blob = _gpkg_blob(srs_id, wkb)
-                min_x = lon if min_x is None else min(min_x, lon)
-                max_x = lon if max_x is None else max(max_x, lon)
-                min_y = lat if min_y is None else min(min_y, lat)
-                max_y = lat if max_y is None else max(max_y, lat)
+                # Injeta coordenadas do Pelourinho de forma cíclica
+                lat, lon = PELOURINHO_COORDS[idx % len(PELOURINHO_COORDS)]
+            
+            wkb = _wkb_point(float(lon), float(lat))
+            geom_blob = _gpkg_blob(srs_id, wkb)
+            min_x = lon if min_x is None else min(min_x, lon)
+            max_x = lon if max_x is None else max(max_x, lon)
+            min_y = lat if min_y is None else min(min_y, lat)
+            max_y = lat if max_y is None else max(max_y, lat)
 
             values = [row.id, row.created_at_str]
             values.extend(row[col] for col in table.column_names)

@@ -34,8 +34,8 @@ async def ingest_file(
         raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
 
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".xlsx", ".xls"):
-        raise HTTPException(status_code=400, detail="Apenas arquivos Excel (.xlsx, .xls) são suportados por enquanto.")
+    if ext not in (".xlsx", ".xls", ".csv"):
+        raise HTTPException(status_code=400, detail="Apenas arquivos Excel (.xlsx, .xls) ou CSV (.csv) são suportados por enquanto.")
 
     # Nome da tabela
     final_table = (table_name or Path(file.filename).stem or DEFAULT_INGEST_TABLE).strip()

@@ -42,8 +42,12 @@ class ExcelIngestor(BaseIngestor):
         t, created = mgr.get_or_create(table_name)
         existing_cols = set(t.column_names)
 
+        ignored_cols = {"id", "created_at"}
+
         # 3. Adicionar colunas vindas do arquivo (STRING por padrão)
         for col in clean_headers:
+            if col in ignored_cols:
+                continue
             if col not in existing_cols:
                 dtype = DynType.AUTO if INGEST_INFER_TYPES else DynType.STRING
                 t.add_column(col, dtype, nullable=True)
@@ -55,6 +59,8 @@ class ExcelIngestor(BaseIngestor):
         lon_col: Optional[str] = None
 
         for col in clean_headers:
+            if col in ignored_cols:
+                continue
             if lat_col is None and col in lat_candidates:
                 lat_col = col
             if lon_col is None and col in lon_candidates:
@@ -77,6 +83,8 @@ class ExcelIngestor(BaseIngestor):
             for i, val in enumerate(row):
                 if i < len(clean_headers):
                     col = clean_headers[i]
+                    if col in ignored_cols:
+                        continue
                     if val is not None:
                         row_data[col] = val
                     else:
@@ -105,12 +113,105 @@ class ExcelIngestor(BaseIngestor):
         mgr.save(t)
 
 
+import csv
+
+class CSVIngestor(BaseIngestor):
+    def ingest(self, file_path: str, table_name: str, mgr: TableManager) -> None:
+        # Tenta ler o arquivo CSV. Encoding UTF-8 com fallback para latin-1
+        try:
+            with open(file_path, mode='r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            with open(file_path, mode='r', encoding='latin-1') as f:
+                content = f.read()
+
+        delimiter = ';' if ';' in content.split('\n')[0] else ','
+        lines = content.splitlines()
+        
+        reader = csv.reader(lines, delimiter=delimiter)
+        try:
+            raw_headers = next(reader)
+        except StopIteration:
+            return
+
+        clean_headers = [re.sub(r'[^a-zA-Z0-9_]', '_', h.strip()).lower() for h in raw_headers]
+
+        t, created = mgr.get_or_create(table_name)
+        existing_cols = set(t.column_names)
+
+        ignored_cols = {"id", "created_at"}
+
+        for col in clean_headers:
+            if col in ignored_cols:
+                continue
+            if col not in existing_cols:
+                dtype = DynType.AUTO if INGEST_INFER_TYPES else DynType.STRING
+                t.add_column(col, dtype, nullable=True)
+                existing_cols.add(col)
+
+        lat_candidates, lon_candidates = get_geo_candidates()
+        lat_col: Optional[str] = None
+        lon_col: Optional[str] = None
+
+        for col in clean_headers:
+            if col in ignored_cols:
+                continue
+            if lat_col is None and col in lat_candidates:
+                lat_col = col
+            if lon_col is None and col in lon_candidates:
+                lon_col = col
+
+        if lat_col and lat_col not in existing_cols:
+            t.add_column(lat_col, DynType.FLOAT, nullable=True)
+            existing_cols.add(lat_col)
+        if lon_col and lon_col not in existing_cols:
+            t.add_column(lon_col, DynType.FLOAT, nullable=True)
+            existing_cols.add(lon_col)
+
+        for row in reader:
+            if not row or all(v.strip() == "" for v in row):
+                continue
+
+            row_data: dict[str, any] = {}
+            for i, val in enumerate(row):
+                if i < len(clean_headers):
+                    col = clean_headers[i]
+                    if col in ignored_cols:
+                        continue
+                    val_str = val.strip()
+                    if val_str == "":
+                        row_data[col] = None
+                    else:
+                        row_data[col] = val_str
+
+            if lat_col and lat_col in row_data:
+                try:
+                    row_data[lat_col] = float(row_data[lat_col]) if row_data[lat_col] is not None else None
+                except (ValueError, TypeError):
+                    row_data[lat_col] = None
+
+            if lon_col and lon_col in row_data:
+                try:
+                    row_data[lon_col] = float(row_data[lon_col]) if row_data[lon_col] is not None else None
+                except (ValueError, TypeError):
+                    row_data[lon_col] = None
+
+            try:
+                t.new_row(**row_data)
+            except Exception:
+                continue
+
+        mgr.save(t)
+
+
 class IngestorFactory:
     @staticmethod
     def process_file(file_path: str, table_name: str, mgr: TableManager) -> None:
         ext = os.path.splitext(file_path)[1].lower()
         if ext in ('.xlsx', '.xls'):
             ingestor = ExcelIngestor()
+        elif ext == '.csv':
+            ingestor = CSVIngestor()
         else:
             raise ValueError(f"Formato {ext} não suportado pelo Ingestor.")
 

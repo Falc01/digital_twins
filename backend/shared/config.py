@@ -20,7 +20,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
 # Dados (Datalake)
 # =============================================================================
 PASTA_DADOS: str = os.path.join("infra", "dados")
-DATA_DIR: str = os.path.join(PROJECT_ROOT, PASTA_DADOS)
+DATA_DIR: str = os.getenv("DATA_DIR") or os.path.join(PROJECT_ROOT, PASTA_DADOS)
 
 TABELA_PADRAO: str | None = None
 MAX_TABELAS: int | None = None

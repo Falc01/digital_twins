@@ -60,19 +60,34 @@ def get_sensors_list(mgr) -> List[Dict[str, Any]]:
         
     table = mgr.get(table_name)
     lat_col, lon_col = detect_coordinate_columns(table)
-    if not lat_col or not lon_col:
-        return []
+    
+    # Coordenadas fixas dos 5 sensores do Pelourinho para Fallback Espacial
+    PELOURINHO_COORDS = [
+        (-12.9745, -38.5120),  # Sensor 1
+        (-12.9745, -38.5085),  # Sensor 2
+        (-12.9735, -38.5102),  # Sensor 3
+        (-12.9725, -38.5120),  # Sensor 4
+        (-12.9725, -38.5085),  # Sensor 5
+    ]
         
     # Group rows by coordinates (representing unique sensors)
     sensor_rows = {}
-    for row in table:
-        lat_val = row[lat_col]
-        lon_val = row[lon_col]
-        if lat_val is None or lon_val is None:
-            continue
+    for idx, row in enumerate(table):
+        if lat_col and lon_col:
+            lat_val = row[lat_col]
+            lon_val = row[lon_col]
+            if lat_val is None or lon_val is None:
+                continue
+            try:
+                lat = float(str(lat_val).replace(",", "."))
+                lon = float(str(lon_val).replace(",", "."))
+            except (ValueError, TypeError):
+                continue
+        else:
+            # Injeta coordenadas do Pelourinho de forma cíclica
+            lat, lon = PELOURINHO_COORDS[idx % len(PELOURINHO_COORDS)]
+            
         try:
-            lat = float(lat_val)
-            lon = float(lon_val)
             # Use rounded coords as key to handle slight precision differences
             key = (round(lat, 5), round(lon, 5))
             # Keep the latest row (assuming chronological order)

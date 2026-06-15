@@ -141,7 +141,18 @@ async function init() {
   /* 3. Autodescoberta de atributos via WFS DescribeFeatureType */
   let wfsAttrs = null;
   try {
-    const props  = await fetchWFSSchema('sensores');
+    let activeTable = 'sensor_readings_demo';
+    try {
+      const statusData = await fetchStatus();
+      if (statusData.tabela) {
+        activeTable = statusData.tabela;
+      }
+    } catch (e) {
+      console.warn('[app] Falha ao ler tabela ativa do status:', e);
+    }
+
+    const typeName = activeTable.replace(/ /g, '_');
+    const props  = await fetchWFSSchema(typeName);
     /* Filtra apenas as propriedades numéricas relevantes (xsd:double, xsd:int) */
     wfsAttrs = props
       .filter((p) => p.type?.includes('double') || p.type?.includes('int'))
