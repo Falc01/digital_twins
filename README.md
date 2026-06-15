@@ -1,100 +1,66 @@
-# DynTable IoT 2.0.0
+# Gêmeo Digital IoT — UNIFACS
 
-Uma biblioteca e ecossistema modular para gerenciamento de dados IoT com suporte a tabelas dinâmicas (sem esquema fixo) e integração geoespacial de alta performance com o QGIS.
-
-Desenvolvido sob rígidas diretrizes de **Pure Python Core** (sem dependências pesadas como Pandas ou NumPy no núcleo) e **QGIS Isolation** (acoplamento fraco e reativo via Middleware).
+Este repositório contém o ecossistema modularizado do projeto de **Gêmeo Digital para Monitoramento IoT** da UNIFACS (Salvador/BA). O sistema integra a ingestão assíncrona de telemetria de sensores, persistência em datalake centralizado, renderização cartográfica via servidor GIS e visualização web em tempo real.
 
 ---
 
-## 🏗 Estrutura do Projeto
+## 🗺️ Visão Geral dos Módulos
 
-O projeto segue uma arquitetura limpa e orientada a domínios:
+O projeto é dividido em quatro módulos físicos e independentes para facilitar o desenvolvimento paralelo, conteinerização e escalabilidade do sistema:
 
-```
-prototipo_IoT_2.0.0/
-│
-├── .gitignore                   ← Exclui arquivos gerados (.dyndb, .gpkg, .qgz)
-├── requirements.txt             ← Dependências leves (Flask, openpyxl, etc.)
-├── README.md
-│
-├── src/
-│   ├── dyntable/                ← Core da Matriz Dinâmica (Pure Python)
-│   │   ├── logic/
-│   │   │   └── ingestors.py     ← Ingestor de planilhas Excel (Strategy Pattern)
-│   │   └── data/
-│   │       ├── _core.py         ← DynTable e DynRow (Views de dados)
-│   │       ├── _matrix.py       ← MatrixStore (Estrutura de dados n×m)
-│   │       └── _types.py        ← Sistema de tipos em runtime
-│   │
-│   ├── qgis/                    ← QGIS Bridge (Acoplamento Fraco)
-│   │   ├── entry/
-│   │   │   ├── launcher.py      ← Gerenciador de subprocesso do QGIS
-│   │   │   └── startup_script.py ← Código Python injetado em runtime no QGIS
-│   │   ├── logic/
-│   │   │   ├── project_manager.py ← Setup e salvamento de projeto (.qgz)
-│   │   │   └── watcher.py       ← Monitoramento de mudanças nos dados (.dyndb)
-│   │   └── data/
-│   │       ├── exporter.py      ← Exportador da DynTable para GeoPackage (.gpkg)
-│   │       └── layer_manager.py ← Manipulador de camadas vetoriais
-│   │
-│   └── web/                     ← Backend Flask
-│       └── entry/
-│           └── web_app.py       ← Servidor e rotas da API REST
-│
-├── web_interface/               ← Frontend (Vanilla HTML, CSS, JavaScript)
-│   ├── index.html               ← Painel de Controle e Upload
-│   ├── styles.css               ← Interface moderna de alta estética
-│   └── app.js                   ← Lógica assíncrona cliente
-│
-├── shared/
-│   └── config.py                ← Configurações globais e caminhos absolutos
-│
-└── infra/dados/                 ← DataLake Local
-    ├── dados_temperatura_salvador_pelourinho.xlsx ← Planilha de Carga
-    └── pelourinho_recortado.tif  ← Basemap Raster do Pelourinho (EPSG:31984)
-```
+### 1. Backend (`/backend`)
+* **O que faz:** Camada lógica e de ingestão de dados. É responsável por receber payloads HTTP dos sensores, processá-los na biblioteca de tabelas dinâmicas `dyntable`, gerenciar a matriz local `.dyndb` e persistir em lote (Micro-batching) os dados no banco espacial `.gpkg` usando o SQLite em modo WAL (Write-Ahead Logging) para mitigar travamentos de escrita.
+* **Onde é expresso:** Interface de API REST HTTP construída com **FastAPI** (Python).
+
+### 2. Frontend (`/frontend`)
+* **O que faz:** Painel web interativo baseado em mapas. Consome as geometrias e imagens diretamente do QGIS Server (WMS/WFS) e as variáveis de status/dados de sensores da API do FastAPI. Realiza a autodescoberta dinâmica de atributos via DescribeFeatureType do WFS.
+* **Onde é expresso:** Interface do navegador do usuário final utilizando **Leaflet.js** (HTML5/CSS3/JavaScript ES6) e servida localmente por um servidor estático Node.js.
+
+### 3. Integração QGIS (`/qgis_integration`)
+* **O que faz:** Automação e publicação cartográfica. Contém a biblioteca `qgis_bridge` e os scripts de inicialização (`startup_script.py`) do QGIS Server, responsáveis por carregar o projeto `.qgz` de engenharia do mapa de forma headless e expô-lo via padrões OGC (WMS/WFS).
+* **Onde é expresso:** Servidor de mapas headless (**QGIS Server**).
+
+### 4. Infraestrutura e Datalake (`/infra`)
+* **O que faz:** Núcleo de dados e orquestração. Contém a pasta `/dados` que funciona como o **Datalake Central** (abrigando a base espacial do GeoPackage `.gpkg`, a matriz `.dyndb` e imagens raster de satélite) e a pasta `/docker` destinada a gerenciar o Docker Compose e volumes de disco compartilhados.
+* **Onde é expresso:** Camada de persistência local e empacotamento de containers (Docker).
 
 ---
 
-## ⚡ Camadas e Princípios Arquiteturais
+## 🌿 Estrutura de Branches (Fluxo de Trabalho)
 
-### 1. Pure Python Core
-A biblioteca `dyntable` armazena e manipula a matriz de dados utilizando exclusivamente as estruturas nativas do Python. Isso garante velocidade máxima de execução, portabilidade e elimina qualquer overhead de pacotes científicos pesados.
+Para otimizar o trabalho de uma equipe de 3 integrantes, o repositório é configurado com isolamento restrito de escopos por ramificação. **Nenhum arquivo ou diretório de módulo é compartilhado entre as branches de desenvolvimento**.
 
-### 2. Ingestor Estratégico & Geolocalização Dinâmica
-O `ExcelIngestor` realiza a carga de planilhas heterogêneas utilizando a biblioteca nativa `openpyxl`.
-* **Carga Aditiva:** Colunas novas criam automaticamente novas dimensões na matriz dinâmica.
-* **Espalhamento no Pelourinho:** Se a planilha não possuir dados de satélite, o ingestor automaticamente distribui os registros de forma alternada (Round-Robin) entre 5 coordenadas geográficas precisas localizadas dentro dos limites do raster `pelourinho_recortado.tif` (EPSG:31984).
+### Branches de Consolidação
+* **`main`**: Contém a estrutura unificada estável (todos os módulos consolidados + pasta `documentos/` de especificação). É a branch principal de produção.
+* **`main-legacy`**: Contém estritamente o código legado original histórico do projeto (`old_code/`) para preservação e consulta de compatibilidade.
 
-### 3. Isolamento do QGIS (QGIS Isolation)
-A ponte de integração não acopla o QGIS diretamente ao núcleo da aplicação. 
-* O QGIS apenas "consome" os GeoPackages exportados.
-* A sincronização em tempo real é feita de forma reativa: a interface salva em `.dyndb` (Pickle), o `watcher.py` (rodando no loop do QGIS) detecta o arquivo, recria o `.gpkg` local e atualiza a camada de exibição preservando a posição e zoom do usuário.
+### Branches de Desenvolvimento (Escopos Exclusivos)
+Ao fazer o checkout em qualquer uma dessas branches, o seu workspace exibirá **apenas** a pasta correspondente e o `.gitignore`/`README.md`.
+* **`dev-backend`**: Exibe apenas a pasta `/backend` (Trabalho do desenvolvedor Backend).
+* **`dev-frontend`**: Exibe apenas a pasta `/frontend` (Trabalho do desenvolvedor Frontend).
+* **`dev-qgis-integration`**: Exibe apenas a pasta `/qgis_integration` (Trabalho do desenvolvedor SIG/QGIS).
+* **`dev-infra`**: Exibe apenas a pasta `/infra` (Trabalho de DevOps para Docker e banco de dados).
 
 ---
 
-## 🚀 Como Executar o Projeto
+## 🚀 Como Executar
 
-### 1. Preparar o Ambiente
-Crie um ambiente virtual e instale as dependências leves:
-```bash
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-# ou
-source .venv/bin/activate # Linux/macOS
+### Pré-requisitos
+* Python 3.10+ (para Backend e QGIS Integration)
+* Node.js (para Frontend)
+* QGIS Desktop / Server (para renderização cartográfica WMS/WFS)
 
-pip install -r requirements.txt
-```
-
-### 2. Iniciar o Servidor Web
-Rode o backend Flask:
-```bash
-python src/web/entry/web_app.py
-```
-O console exibirá o endereço `http://127.0.0.1:8502`.
-
-### 3. Painel de Controle
-* Acesse `http://127.0.0.1:8502` no navegador.
-* Faça o upload da planilha contida em `infra/dados/dados_temperatura_salvador_pelourinho.xlsx`.
-* Veja a matriz de dados ser populada instantaneamente.
-* Clique em **"Abrir no QGIS"**. O lançador irá procurar o seu executável local do QGIS, gerar um projeto `.qgz` zerado, carregar o mapa base do Pelourinho e plotar os 5 sensores virtuais com todos os seus dados correlacionados!
+### Desenvolvimento Local do Frontend
+1. Acesse o diretório:
+   ```bash
+   cd frontend
+   ```
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+   O painel de controle estará acessível em `http://localhost:3000`.
