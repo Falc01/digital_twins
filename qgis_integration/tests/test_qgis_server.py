@@ -43,7 +43,7 @@ def run_http_request(url: str, params: dict) -> tuple[int, bytes, str | None]:
         return 500, b"", None
 
 
-def test_wms_capabilities() -> bool:
+def test_wms_capabilities() -> None:
     """
     Testa se o QGIS Server responde ao GetCapabilities do WMS.
     """
@@ -56,24 +56,16 @@ def test_wms_capabilities() -> bool:
     
     status, body, content_type = run_http_request(QGIS_SERVER_URL, params)
     
-    if status == 200 and b"<WMS_Capabilities" in body:
-        logger.info("[OK] WMS GetCapabilities respondeu corretamente.")
-        return True
-    else:
-        logger.error(
-            "[FALHA] WMS GetCapabilities falhou. Status: %d, Content-Type: %s. "
-            "Garanta que o QGIS Server e o projeto .qgz estejam acessíveis.",
-            status, content_type
-        )
-        if body:
-            logger.debug("Resposta do servidor:\n%s", body[:500].decode("utf-8", errors="ignore"))
-        return False
+    assert status == 200, f"Expected HTTP 200, got {status}"
+    assert b"<WMS_Capabilities" in body, f"Response is not valid WMS Capabilities XML. Response: {body[:300].decode('utf-8', errors='ignore')}"
+    logger.info("[OK] WMS GetCapabilities respondeu corretamente.")
 
 
-def test_wms_getmap(layer_name: str) -> bool:
+def test_wms_getmap() -> None:
     """
     Testa a renderização de mapas do WMS (GetMap) retornando uma imagem PNG.
     """
+    layer_name = os.getenv("TEST_LAYER", "sensor_readings_demo")
     params = {
         "SERVICE": "WMS",
         "VERSION": "1.3.0",
@@ -89,55 +81,43 @@ def test_wms_getmap(layer_name: str) -> bool:
     
     status, body, content_type = run_http_request(QGIS_SERVER_URL, params)
     
-    # Valida se o retorno é uma imagem PNG (assinatura \x89PNG\r\n\x1a\n)
-    if status == 200 and content_type == "image/png" and body.startswith(b"\x89PNG"):
-        logger.info("[OK] WMS GetMap renderizou a camada '%s' com sucesso.", layer_name)
-        return True
-    else:
-        logger.error(
-            "[FALHA] WMS GetMap falhou para a camada '%s'. Status: %d, Content-Type: %s",
-            layer_name, status, content_type
-        )
-        if b"<ServiceException" in body:
-            logger.error("Exceção QGIS Server:\n%s", body.decode("utf-8", errors="ignore"))
-        return False
+    assert status == 200, f"WMS GetMap falhou. Status: {status}. Response: {body[:300].decode('utf-8', errors='ignore')}"
+    assert content_type == "image/png", f"Expected Content-Type image/png, got {content_type}"
+    assert body.startswith(b"\x89PNG"), "Response body is not a valid PNG image"
+    logger.info("[OK] WMS GetMap renderizou a camada '%s' com sucesso.", layer_name)
 
 
-def test_wfs_getfeature(layer_name: str) -> bool:
+def test_wfs_getfeature() -> None:
     """
     Testa a exportação de feições vetoriais do WFS (GetFeature) em formato GeoJSON.
     """
+    layer_name = os.getenv("TEST_LAYER", "sensor_readings_demo")
+    # O QGIS Server substitui espaços por underscores ao exportar TypeNames de WFS.
+    typename = layer_name.replace(" ", "_")
+    
     params = {
         "SERVICE": "WFS",
         "VERSION": "1.1.0",
         "REQUEST": "GetFeature",
-        "TYPENAME": layer_name,
+        "TYPENAME": typename,
         "OUTPUTFORMAT": "application/json",
         "MAP": QGIS_PROJECT_PATH_CONTAINER
     }
     
     status, body, content_type = run_http_request(QGIS_SERVER_URL, params)
     
-    if status == 200 and ("application/json" in str(content_type) or "text/plain" in str(content_type)):
-        try:
-            data = json.loads(body.decode("utf-8"))
-            features_count = len(data.get("features", []))
-            logger.info(
-                "[OK] WFS GetFeature respondeu com sucesso para a camada '%s' (%d feições detectadas).",
-                layer_name, features_count
-            )
-            return True
-        except json.JSONDecodeError:
-            logger.error("[FALHA] WFS respondeu HTTP 200, mas o corpo não continha um JSON válido.")
-            return False
-    else:
-        logger.error(
-            "[FALHA] WFS GetFeature falhou para a camada '%s'. Status: %d, Content-Type: %s",
-            layer_name, status, content_type
+    assert status == 200, f"WFS GetFeature falhou. Status: {status}. Response: {body[:300].decode('utf-8', errors='ignore')}"
+    assert "json" in str(content_type).lower(), f"Expected JSON Content-Type, got {content_type}"
+    
+    try:
+        data = json.loads(body.decode("utf-8"))
+        features_count = len(data.get("features", []))
+        logger.info(
+            "[OK] WFS GetFeature respondeu com sucesso para a camada '%s' (%d feições detectadas).",
+            typename, features_count
         )
-        if body:
-            logger.error("Resposta do servidor:\n%s", body.decode("utf-8", errors="ignore"))
-        return False
+    except json.JSONDecodeError:
+        raise AssertionError("WFS respondeu HTTP 200, mas o corpo não continha um JSON válido.")
 
 
 def main():
@@ -145,19 +125,17 @@ def main():
     logger.info("Servidor Alvo: %s", QGIS_SERVER_URL)
     logger.info("Projeto no Container: %s", QGIS_PROJECT_PATH_CONTAINER)
     
-    # Camada a ser consultada (mude se usar outra tabela dinâmica)
-    layer = os.getenv("TEST_LAYER", "sensor_readings_demo")
-    
-    success = True
-    success &= test_wms_capabilities()
-    success &= test_wms_getmap(layer)
-    success &= test_wfs_getfeature(layer)
-    
-    if success:
+    try:
+        test_wms_capabilities()
+        test_wms_getmap()
+        test_wfs_getfeature()
         logger.info("=== TODOS OS TESTES PASSARAM COM SUCESSO ===")
         sys.exit(0)
-    else:
-        logger.error("=== HOUVE FALHAS NO TESTE DE INTEGRAÇÃO DO QGIS SERVER ===")
+    except AssertionError as e:
+        logger.error("=== HOUVE FALHAS NO TESTE DE INTEGRAÇÃO DO QGIS SERVER: %s ===", e)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("=== ERRO INESPERADO: %s ===", e)
         sys.exit(1)
 
 
