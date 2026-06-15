@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # 1. API Backend (FastAPI + Python)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gd-backend
+    restart: always
+    environment:
+      - PYTHONPATH=/app/src
+      - DATA_DIR=/app/infra/dados
+    volumes:
+      - ./infra/dados:/app/infra/dados
+    # Porta exposta internamente para o Nginx. Não precisa mapear para o host, pois o Nginx centraliza o acesso.
+    expose:
+      - "8000"
+
+  # 2. Frontend Web (Node.js Server serving Leaflet app)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gd-frontend
+    restart: always
+    # Porta exposta internamente para o Nginx.
+    expose:
+      - "3000"
+
+  # 3. Servidor de Mapas Headless (QGIS Server)
+  qgis-server:
+    image: qgis/qgis-server:latest
+    container_name: gd-qgis-server
+    restart: always
+    environment:
+      - QGIS_PROJECT_FILE=/infra/dados/projeto_iot.qgz
+      - QGIS_SERVER_LOG_LEVEL=0
+      - DEBUG=1
+    volumes:
+      - ./infra/dados:/infra/dados
+    # Porta exposta internamente para o Nginx.
+    expose:
+      - "80"
+
+  # 4. Gateway de Entrada / Proxy Reverso (Nginx)
+  nginx:
+    image: nginx:alpine
+    container_name: gd-nginx
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
+      - frontend
+      - qgis-server
