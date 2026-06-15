@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gêmeo Digital — UNIFACS IoT</title>
+
+  <!-- Leaflet CSS (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+
+  <!-- Tipografia (Google Fonts) -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       GÊMEO DIGITAL — UNIFACS IoT
+       Design System + Componentes
+       ═══════════════════════════════════════════════════════ */
+
+    /* ── DESIGN TOKENS ──────────────────────────────────────────────── */
+    :root {
+      /* Backgrounds */
+      --bg0: #030d1c;
+      --bg1: #071526;
+      --bg2: #0c1f38;
+      --bg3: #112847;
+
+      /* Borders */
+      --bdr:  #162f52;
+      --bdr2: #1e3e6e;
+
+      /* Cores de estado */
+      --cy:   #00d4ff;
+      --cy15: rgba(0, 212, 255, .15);
+      --cy35: rgba(0, 212, 255, .35);
+
+      --gn:   #22c55e;
+      --gn15: rgba(34, 197, 94, .15);
+
+      --am:   #f59e0b;
+      --am15: rgba(245, 158, 11, .15);
+
+      --rd:   #ef4444;
+      --rd15: rgba(239, 68, 68, .15);
+
+      /* Texto */
+      --t0: #ddeaf8;
+      --t1: #7da8ce;
+      --t2: #3a6080;
+
+      /* Tipografia */
+      --fd: 'Space Mono', monospace;
+      --fb: 'Inter', sans-serif;
+      --fm: 'JetBrains Mono', monospace;
+
+      /* Layout */
+      --sw: 272px;
+      --th: 50px;
+      --sb: 40px;
+      --r:  6px;
+      --tr: .16s ease;
+    }
+
+    /* ── RESET ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg0);
+      color: var(--t0);
+      font-family: var(--fb);
+      font-size: 13px;
+    }
+
+    /* ── LOADING SCREEN ──────────────────────────────────────────────── */
+    #ld {
+      position: fixed;
+      inset: 0;
+      background: var(--bg0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity .5s ease;
+    }
+    #ld.gone { opacity: 0; pointer-events: none; }
+    .ld-logo  { font-family: var(--fd); font-size: 20px; font-weight: 700; color: var(--cy); letter-spacing: .1em; margin-bottom: 6px; text-align: center; }
+    .ld-sub   { font-size: 11px; color: var(--t1); letter-spacing: .06em; margin-bottom: 28px; text-align: center; }
+    .ld-track { width: 220px; height: 2px; background: var(--bdr); border-radius: 1px; overflow: hidden; margin-bottom: 10px; }
+    .ld-bar   { height: 100%; background: var(--cy); width: 0; transition: width .25s ease; }
+    .ld-msg   { font-family: var(--fm); font-size: 10px; color: var(--t2); text-align: center; }
+
+    /* ── APP GRID ─────────────────────────────────────────────────────── */
+    #app {
+      display: grid;
+      grid-template-rows: var(--th) 1fr var(--sb);
+      grid-template-columns: var(--sw) 1fr;
+      grid-template-areas:
+        "tb tb"
+        "sd mp"
+        "st st";
+      height: 100vh;
+    }
+
+    /* ── TOPBAR ──────────────────────────────────────────────────────── */
+    #tb {
+      grid-area: tb;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--bdr);
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      gap: 14px;
+      z-index: 600;
+    }
+
+    .brand     { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+    .brand-ico {
+      width: 28px; height: 28px;
+      background: var(--cy15);
+      border: 1px solid var(--cy35);
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand-ico svg { width: 15px; height: 15px; stroke: var(--cy); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .brand-nm { font-family: var(--fd); font-size: 12px; font-weight: 700; color: var(--t0); letter-spacing: .05em; }
+    .brand-sm { font-size: 9px; color: var(--t1); letter-spacing: .08em; text-transform: uppercase; }
+
+    .vdiv { width: 1px; height: 22px; background: var(--bdr); flex-shrink: 0; }
+
+    .tb-stats  { flex: 1; display: flex; align-items: center; gap: 18px; }
+    .tb-s      { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--t1); }
+    .tb-s .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .tb-s .val { font-family: var(--fm); color: var(--t0); font-size: 12px; }
+
+    .tb-right { display: flex; align-items: center; gap: 10px; }
+
+    /* Badges */
+    .badge { padding: 2px 8px; border-radius: 3px; font-family: var(--fm); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .b-gn  { background: var(--gn15); border: 1px solid rgba(34,197,94,.35);  color: var(--gn); }
+    .b-cy  { background: var(--cy15); border: 1px solid var(--cy35);           color: var(--cy); }
+
+    #clock { font-family: var(--fm); font-size: 11px; color: var(--t1); }
+
+    /* ── SIDEBAR ──────────────────────────────────────────────────────── */
+    #sd {
+      grid-area: sd;
+      background: var(--bg1);
+      border-right: 1px solid var(--bdr);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    #sd::-webkit-scrollbar       { width: 3px; }
+    #sd::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+
+    .sec   { border-bottom: 1px solid var(--bdr); }
+    .sec-h { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; user-select: none; transition: background var(--tr); }
+    .sec-h:hover { background: var(--bg3); }
+    .sec-t  { font-family: var(--fd); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--t1); }
+    .sec-ch { color: var(--t2); font-size: 10px; transition: transform var(--tr); display: inline-block; }
+    .sec-ch.o { transform: rotate(180deg); }
+    .sec-b  { padding: 8px 14px 12px; }
+
+    /* Layer toggles */
+    .ly-item { display: flex; align-items: center; gap: 9px; padding: 5px 0; cursor: pointer; }
+    .ly-ck   { width: 13px; height: 13px; border: 1px solid var(--bdr2); border-radius: 2px; display: flex; align-items: center; justify-content: center; transition: all var(--tr); flex-shrink: 0; }
+    .ly-ck.on { background: var(--cy15); border-color: var(--cy); }
+    .ly-ck.on::after { content: ''; width: 5px; height: 5px; background: var(--cy); border-radius: 1px; }
+    .ly-lbl    { font-size: 12px; color: var(--t0); }
+    .ly-lbl em { font-style: normal; font-family: var(--fm); font-size: 9px; color: var(--t2); margin-left: 4px; }
+
+    /* Attr buttons */
+    .ag   { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .ab   { padding: 7px 6px; border-radius: var(--r); border: 1px solid var(--bdr2); background: transparent; color: var(--t1); font-family: var(--fm); font-size: 9px; cursor: pointer; text-align: center; transition: all var(--tr); }
+    .ab:hover { background: var(--bg3); color: var(--t0); border-color: var(--cy); }
+    .ab.on    { background: var(--cy15); border-color: var(--cy); color: var(--cy); }
+    .ab .av   { display: block; font-size: 13px; font-weight: 500; margin-top: 1px; color: inherit; }
+
+    /* Sensor list */
+    .si      { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; transition: background var(--tr); margin-bottom: 1px; }
+    .si:hover { background: var(--bg3); }
+    .si.sel   { background: var(--bg2); outline: 1px solid var(--bdr2); }
+    .sd-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .sdo { background: var(--gn); box-shadow: 0 0 6px var(--gn); }
+    .sdw { background: var(--am); box-shadow: 0 0 6px var(--am); }
+    .sda { background: var(--rd); box-shadow: 0 0 6px var(--rd); animation: pulse-rd 1s ease-in-out infinite; }
+
+    .sn-info { flex: 1; min-width: 0; }
+    .sn-name { font-size: 11px; font-weight: 500; color: var(--t0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sn-id   { font-family: var(--fm); font-size: 9px; color: var(--t2); }
+    .sn-val  { font-family: var(--fm); font-size: 11px; text-align: right; }
+
+    /* ── MAP ──────────────────────────────────────────────────────────── */
+    #mp { grid-area: mp; background: var(--bg0); position: relative; z-index: 100; }
+
+    /* Leaflet overrides */
+    .leaflet-popup-content-wrapper { background: var(--bg2); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+    .leaflet-popup-content { margin: 0 !important; }
+    .leaflet-popup-tip-container .leaflet-popup-tip { background: var(--bg2) !important; }
+    .leaflet-control-zoom { border: 1px solid var(--bdr2) !important; border-radius: var(--r) !important; overflow: hidden; }
+    .leaflet-control-zoom a { background: var(--bg1) !important; color: var(--t0) !important; }
+    .leaflet-control-zoom a:hover { background: var(--bg3) !important; color: var(--t0) !important; }
+    .leaflet-control-attribution { background: rgba(3,13,28,.85) !important; color: var(--t2) !important; font-size: 9px !important; padding: 2px 6px !important; }
+    .leaflet-control-attribution a { color: var(--t1) !important; }
+
+    /* Popup content */
+    .pu       { padding: 14px 16px; min-width: 240px; }
+    .pu-hd    { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--bdr); }
+    .pu-nm    { font-family: var(--fd); font-size: 11px; font-weight: 700; color: var(--t0); }
+    .pu-id    { font-family: var(--fm); font-size: 9px; color: var(--t2); margin-top: 2px; }
+    .pu-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .pu-card  { background: var(--bg1); border: 1px solid var(--bdr); border-radius: 4px; padding: 5px 8px; }
+    .pu-lbl   { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--t2); margin-bottom: 2px; }
+    .pu-val   { font-family: var(--fm); font-size: 15px; font-weight: 500; }
+    .pu-unit  { font-size: 9px; color: var(--t1); }
+    .pu-ft    { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--bdr); font-family: var(--fm); font-size: 9px; color: var(--t2); display: flex; justify-content: space-between; align-items: center; }
+
+    /* Map overlays */
+    .mo { position: absolute; z-index: 400; }
+    #wms-badge { top: 10px; left: 10px; background: rgba(7,21,38,.85); border: 1px solid var(--bdr); border-radius: 4px; padding: 6px 10px; display: flex; align-items: center; gap: 6px; }
+    .wms-blink { width: 6px; height: 6px; border-radius: 50%; background: var(--cy); animation: blink 1.5s ease-in-out infinite; }
+
+    /* ── STATUS BAR ──────────────────────────────────────────────────── */
+    #st { grid-area: st; background: var(--bg1); border-top: 1px solid var(--bdr); display: flex; align-items: center; padding: 0 14px; gap: 14px; overflow-x: auto; }
+    .st-item     { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--t1); white-space: nowrap; }
+    .st-item .dot { width: 5px; height: 5px; border-radius: 50%; }
+    .st-val { font-family: var(--fm); font-size: 10px; }
+    #mock-note  { margin-left: auto; font-family: var(--fm); font-size: 9px; color: var(--t2); padding: 2px 8px; border: 1px solid var(--bdr); border-radius: 3px; }
+
+    /* Legend */
+    #leg-strip { height: 7px; border-radius: 4px; margin-bottom: 5px; }
+    .leg-lbl   { display: flex; justify-content: space-between; }
+    .leg-l     { font-family: var(--fm); font-size: 9px; color: var(--t2); }
+
+    /* ── ANIMATIONS ─────────────────────────────────────────────────── */
+    @keyframes blink    { 0%,100%{ opacity:1 }    50%{ opacity:.35 } }
+    @keyframes pr       { 0%{ transform:scale(1); opacity:.65 } 100%{ transform:scale(2.8); opacity:0 } }
+    @keyframes prf      { 0%{ transform:scale(1); opacity:.8  } 100%{ transform:scale(3.2); opacity:0 } }
+    @keyframes pulse-rd { 0%,100%{ box-shadow:0 0 4px var(--rd) } 50%{ box-shadow:0 0 12px var(--rd) } }
+
+    .pulse-dot { animation: blink 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     LOADING SCREEN
+     ══════════════════════════════════════════════════════════════ -->
+<div id="ld">
+  <div>
+    <div class="ld-logo">GÊMEO DIGITAL</div>
+    <div class="ld-sub">UNIFACS — Sistema de Monitoramento IoT</div>
+    <div class="ld-track"><div class="ld-bar" id="lbar"></div></div>
+    <div class="ld-msg" id="lmsg">Inicializando sistema...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     APP GRID (topbar · sidebar · mapa · statusbar)
+     ══════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── TOPBAR ─────────────────────────────────────────────────── -->
+  <header id="tb">
+    <div class="brand">
+      <div class="brand-ico">
+        <svg viewBox="0 0 24 24">
+          <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
+          <line x1="12" y1="2"    x2="12" y2="22"/>
+          <line x1="2"  y1="8.5"  x2="22" y2="8.5"/>
+          <line x1="2"  y1="15.5" x2="22" y2="15.5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-nm">GÊMEO DIGITAL</div>
+        <div class="brand-sm">UNIFACS · Salvador, BA</div>
+      </div>
+    </div>
+
+    <div class="vdiv"></div>
+
+    <div class="tb-stats">
+      <div class="tb-s">
+        <span class="dot pulse-dot" style="background:var(--gn);box-shadow:0 0 5px var(--gn)"></span>
+        <span>Sensores ativos</span>
+        <span class="val" id="ts-on">–/–</span>
+      </div>
+      <div class="tb-s">
+        <span style="font-size:11px;color:var(--am)">⚠</span>
+        <span>Alertas</span>
+        <span class="val" id="ts-al">–</span>
+      </div>
+      <div class="tb-s">
+        <span class="dot pulse-dot" style="background:var(--cy);box-shadow:0 0 5px var(--cy)"></span>
+        <span style="font-family:var(--fm);font-size:9px">QGIS WMS</span>
+        <span class="badge b-cy">OFFLINE</span>
+      </div>
+    </div>
+
+    <div class="tb-right">
+      <span class="badge b-cy">DEMO v0.1</span>
+      <span id="clock"></span>
+    </div>
+  </header>
+
+  <!-- ── SIDEBAR ────────────────────────────────────────────────── -->
+  <aside id="sd">
+
+    <!-- Camadas -->
+    <div class="sec">
+      <div class="sec-h" onclick="ui.togSec('ly')">
+        <span class="sec-t">Camadas</span>
+        <span class="sec-ch o" id="ch-ly">▾</span>
+      </div>
+      <div class="sec-b" id="sb-ly">
+        <div class="ly-item" onclick="ui.togLayer('base')">
+          <div class="ly-ck on" id="lc-base"></div>
+          <span class="ly-lbl">Mapa Base <em>CartoDB</em></span>
+        </div>
+        <div class="ly-item" onclick="ui.togLayer('sns')">
+          <div class="ly-ck on" id="lc-sns"></div>
+          <span class="ly-lbl">Sensores IoT <em>Markers</em></span>
+        </div>
+        <div class="ly-item" onclick="ui.togLayer('heat')">
+          <div class="ly-ck" id="lc-heat"></div>
+          <span class="ly-lbl">Mapa de Calor <em>Temperatura</em></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Variável de Sensor -->
+    <div class="sec">
+      <div class="sec-h" onclick="ui.togSec('vr')">
+        <span class="sec-t">Variável de Sensor</span>
+        <span class="sec-ch o" id="ch-vr">▾</span>
+      </div>
+      <div class="sec-b" id="sb-vr">
+        <div style="font-size:10px;color:var(--t2);margin-bottom:8px">
+          Dados Locais · <span id="ac">0</span> atributos
+        </div>
+        <div class="ag" id="ag"></div>
+      </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="sec">
+      <div class="sec-h" onclick="ui.togSec('lg')">
+        <span class="sec-t">Legenda</span>
+        <span class="sec-ch o" id="ch-lg">▾</span>
+      </div>
+      <div class="sec-b" id="sb-lg">
+        <div id="leg-attr"></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)">
+          <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Status dos Sensores</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sdo"></span><span style="color:var(--t1)">Online</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sdw"></span><span style="color:var(--t1)">Alerta</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sda"></span><span style="color:var(--t1)">Crítico</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de Sensores -->
+    <div class="sec" style="border-bottom:none;flex:1">
+      <div class="sec-h" onclick="ui.togSec('sl')">
+        <span class="sec-t">Sensores — <span id="sc" style="color:var(--cy)">0</span></span>
+        <span class="sec-ch o" id="ch-sl">▾</span>
+      </div>
+      <div class="sec-b" id="sb-sl" style="padding-top:2px"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAPA ───────────────────────────────────────────────── -->
+  <main id="mp">
+    <div class="mo" id="wms-badge">
+      <span class="wms-blink"></span>
+      <span id="wms-lbl" style="font-family:var(--fm);font-size:10px">Mapa Interativo</span>
+    </div>
+  </main>
+
+  <!-- ── STATUS BAR ─────────────────────────────────────────── -->
+  <footer id="st">
+    <div class="st-item">
+      <span class="dot" style="background:var(--cy)"></span>
+      <span>Modo Demo</span>
+      <span class="st-val" style="color:var(--cy)">Dados Locais</span>
+    </div>
+    <div class="vdiv"></div>
+    <div class="st-item">
+      <span>Sensores Ativos</span>
+      <span class="st-val" id="sync-ts" style="color:var(--gn)">12/12</span>
+    </div>
+    <div id="mock-note">DEMO — Sem Backend</div>
+  </footer>
+
+</div><!-- /#app -->
+
+</body>
+</html>
