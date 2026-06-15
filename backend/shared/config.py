@@ -13,7 +13,8 @@ import os
 from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(_HERE)
+# Sobe para a raiz real do workspace (digital_twins/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(_HERE))
 
 # =============================================================================
 # Dados (Datalake)

@@ -80,7 +80,7 @@ def _write_status(table: str, rows: int) -> None:
     status_path = Path(DATA_DIR) / "status.json"
     data = {
         "ultima_atualizacao": datetime.now().isoformat(timespec="seconds"),
-        "status": "sucesso",
+        "status": "pendente",
         "tabela": table,
         "rows_adicionados": rows,
     }
