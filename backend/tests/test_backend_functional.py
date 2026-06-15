@@ -36,7 +36,7 @@ def test_status_initial():
 
 def test_ingest_and_query_user_excel():
     """Teste end-to-end com o Excel real que o usuário adicionou."""
-    xlsx_path = Path("infra/dados/dados_temperatura_salvador_pelourinho.xlsx")
+    xlsx_path = Path(DATA_DIR) / "dados_temperatura_salvador_pelourinho.xlsx"
     assert xlsx_path.exists(), "Excel de teste não encontrado"
 
     table_name = "test_estacao_funcional"
