@@ -20,10 +20,11 @@ from src.api.schemas import IngestResponse
 from dyntable.logic.ingestors import IngestorFactory
 from shared.config import DEFAULT_INGEST_TABLE, DATA_DIR
 
-router = APIRouter(prefix="/ingest", tags=["ingest"])
+router = APIRouter(tags=["ingest"])
 
 
-@router.post("/", response_model=IngestResponse, summary="Ingerir arquivo Excel/CSV em tabela dinâmica")
+@router.post("/upload", response_model=IngestResponse, summary="Ingerir arquivo Excel/CSV em tabela dinâmica")
+@router.post("/ingest", response_model=IngestResponse, summary="Ingerir arquivo Excel/CSV em tabela dinâmica")
 async def ingest_file(
     file: UploadFile = File(..., description="Arquivo .xlsx ou .xls com os dados"),
     table_name: Optional[str] = Form(None, description="Nome da tabela (default: leituras ou nome do arquivo)"),

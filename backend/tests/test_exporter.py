@@ -22,10 +22,11 @@ from qgis_bridge.exporter import (
     detect_coordinate_columns,
     export_all_tables,
     export_csv,
-    export_geojson,
+    export_gpkg,
+    save_to_gpkg,
     table_to_csv_string,
-    table_to_geojson,
 )
+import sqlite3
 
 
 # ─────────────────────────────────────────────
@@ -129,56 +130,33 @@ def test_csv_none_as_empty_string():
     print(f"✓ table_to_csv_string — None vira campo vazio")
 
 
-def test_geojson_structure():
+def test_gpkg_creation_and_wal(tmp_path):
     t = _make_sensor_table()
-    gj = table_to_geojson(t)
-    assert gj["type"] == "FeatureCollection"
-    assert "features" in gj
-    assert "_meta" in gj
-    print("✓ table_to_geojson — estrutura FeatureCollection correta")
-
-
-def test_geojson_skips_null_coords():
-    t = _make_sensor_table()
-    gj = table_to_geojson(t)
-    # 3 sensores com coords + 1 sem → 3 features
-    assert len(gj["features"]) == 3, f"Esperado 3 features, obtido {len(gj['features'])}"
-    assert gj["_meta"]["skipped_no_coords"] == 1
-    print(f"✓ table_to_geojson — linhas sem coord ignoradas (skipped=1)")
-
-
-def test_geojson_geometry():
-    t = _make_sensor_table()
-    gj = table_to_geojson(t)
-    for feat in gj["features"]:
-        geom = feat["geometry"]
-        assert geom["type"] == "Point"
-        assert len(geom["coordinates"]) == 2
-        lon, lat = geom["coordinates"]
-        assert -90 <= lat <= 90,   f"Latitude inválida: {lat}"
-        assert -180 <= lon <= 180, f"Longitude inválida: {lon}"
-    print("✓ table_to_geojson — geometrias Point válidas")
-
-
-def test_geojson_properties():
-    t = _make_sensor_table()
-    gj = table_to_geojson(t)
-    feat = gj["features"][0]
-    props = feat["properties"]
-    assert "id" in props
-    assert "created_at" in props
-    assert "device_id" in props
-    assert "temperatura" in props
-    print(f"✓ table_to_geojson — propriedades: {list(props.keys())}")
-
-
-def test_geojson_no_coords_table():
-    t = _make_table_no_coords()
-    gj = table_to_geojson(t)
-    assert gj["type"] == "FeatureCollection"
-    assert len(gj["features"]) == 0
-    assert gj["_meta"]["lat_col"] is None
-    print("✓ table_to_geojson — tabela sem coords → 0 features, sem erro")
+    gpkg_path = os.path.join(tmp_path, "sensores.gpkg")
+    path = save_to_gpkg(gpkg_path, t)
+    assert path == gpkg_path
+    assert os.path.exists(gpkg_path)
+    
+    conn = sqlite3.connect(gpkg_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode")
+        journal_mode = cursor.fetchone()[0]
+        assert journal_mode.lower() == "wal"
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+        assert "gpkg_contents" in tables
+        assert "gpkg_geometry_columns" in tables
+        assert "sensores" in tables
+        
+        cursor.execute("SELECT id, device_id, temperatura, ativo FROM sensores ORDER BY id")
+        rows = cursor.fetchall()
+        assert len(rows) == 4
+        assert rows[0] == (1, "S01", 24.5, 1)
+    finally:
+        conn.close()
+    print("✓ test_gpkg_creation_and_wal — GPKG criado em modo WAL com dados alfanuméricos")
 
 
 def test_export_csv_file(tmp_path):
@@ -192,15 +170,11 @@ def test_export_csv_file(tmp_path):
     print(f"✓ export_csv — arquivo criado: {os.path.basename(path)}")
 
 
-def test_export_geojson_file(tmp_path):
+def test_export_gpkg_file(tmp_path):
     t = _make_sensor_table()
-    path = export_geojson(t, str(tmp_path))
+    path = export_gpkg(t, str(tmp_path))
     assert os.path.exists(path), f"Arquivo não criado: {path}"
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    assert data["type"] == "FeatureCollection"
-    assert len(data["features"]) == 3
-    print(f"✓ export_geojson — arquivo criado: {os.path.basename(path)}")
+    print(f"✓ export_gpkg — arquivo criado: {os.path.basename(path)}")
 
 
 def test_export_all_tables(tmp_path):
@@ -229,7 +203,7 @@ def test_table_exporter_refresh(tmp_path):
     exporter = TableExporter("sensores", data_dir, data_dir)
     ok = exporter.refresh()
     assert ok, "TableExporter.refresh() retornou False"
-    assert os.path.exists(exporter.geojson_path), "GeoJSON não criado"
+    assert os.path.exists(exporter.gpkg_path), "GPKG não criado"
     assert os.path.exists(exporter.csv_path),     "CSV não criado"
     assert exporter.last_export_str != "nunca"
     print(f"✓ TableExporter.refresh() — ok, última exportação: {exporter.last_export_str}")
@@ -262,13 +236,9 @@ if __name__ == "__main__":
             (test_csv_string_columns,                  []),
             (test_csv_string_row_count,                []),
             (test_csv_none_as_empty_string,            []),
-            (test_geojson_structure,                   []),
-            (test_geojson_skips_null_coords,           []),
-            (test_geojson_geometry,                    []),
-            (test_geojson_properties,                  []),
-            (test_geojson_no_coords_table,             []),
+            (test_gpkg_creation_and_wal,               [tmp_path]),
             (test_export_csv_file,                     [tmp_path]),
-            (test_export_geojson_file,                 [tmp_path]),
+            (test_export_gpkg_file,                    [tmp_path]),
             (test_export_all_tables,                   [tmp_path]),
             (test_table_exporter_refresh,              [tmp_path]),
             (test_table_exporter_missing_table,        [tmp_path]),

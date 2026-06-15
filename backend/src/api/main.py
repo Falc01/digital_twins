@@ -27,6 +27,7 @@ from src.api.dependencies import get_table_manager
 from src.api.routers import ingest, tables, status
 from shared.config import DATA_DIR
 from qgis_bridge.exporter import export_all_tables
+from dyntable.data._types import DynType
 
 # Para rodar com PYTHONPATH=src ou após pip install -e .
 # imports de dyntable são feitos dentro dos routers/dependencies como "from dyntable..."
@@ -86,9 +87,23 @@ app.add_middleware(
 )
 
 # Routers
+# Rotas prefixadas para o Frontend
 app.include_router(ingest.router, prefix="/api")
 app.include_router(tables.router, prefix="/api")
+app.include_router(status.router, prefix="/api/v1")
+app.include_router(status.router, prefix="/api")
+
+# Rotas sem prefixo para compatibilidade com os Testes e legado
+app.include_router(ingest.router)
+app.include_router(tables.router)
 app.include_router(status.router)
+
+
+# Endpoints de listagem de tipos de dados (DynTypes)
+@app.get("/api/types", tags=["types"])
+@app.get("/types", tags=["types"])
+def get_types():
+    return [t.name for t in DynType]
 
 
 @app.get("/", tags=["root"])

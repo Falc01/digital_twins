@@ -59,7 +59,7 @@ EXPORT_GPKG: bool = True
 # Se NENHUMA estiver presente (ex.: dados de estação meteorológica sem geo),
 # nenhuma coluna lat/lon é criada nem valores falsos são injetados.
 GEO_LAT_CANDIDATES: list[str] = ["latitude", "lat", "y", "coord_y", "latitud"]
-GEO_LON_CANDIDATES: list[str] = ["longitude", "lon", "x", "coord_x", "longitud"]
+GEO_LON_CANDIDATES: list[str] = ["longitude", "lon", "long", "x", "coord_x", "longitud"]
 
 # Se True, o ingestor tenta inferir tipos (FLOAT para números, STRING caso contrário)
 # ao criar colunas a partir do cabeçalho do Excel.

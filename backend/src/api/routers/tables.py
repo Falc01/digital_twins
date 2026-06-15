@@ -135,3 +135,21 @@ def rename_column(
     table.rename_column(column_name, new_name)
     mgr.save(table)
     return {"column": new_name}
+
+
+@router.post("/{name}/columns/{column_name}/rename")
+def rename_column_post(
+    name: str,
+    column_name: str,
+    payload: dict = Body(...),
+    mgr: TableManagerDep = None,
+):
+    if not mgr.exists(name):
+        raise HTTPException(status_code=404, detail=f"Tabela '{name}' não encontrada")
+    new_name = payload.get("new_name") or payload.get("name")
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Campo 'new_name' é obrigatório")
+    table = mgr.get(name)
+    table.rename_column(column_name, new_name)
+    mgr.save(table)
+    return {"column": new_name}
