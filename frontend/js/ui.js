@@ -109,11 +109,23 @@ export function renderAttrBtns(attrs) {
   if (acEl) acEl.textContent = resolvedAttrs.length;
 
   agEl.innerHTML = resolvedAttrs.map((a) => {
-    const c = AC[a];
-    if (!c) return '';
-    const avg = (SENSORS.reduce((t, s) => t + (s.data[a] ?? 0), 0) / SENSORS.length).toFixed(1);
+    // Fallback dinâmico: se a variável não possui config no AC, gera uma dinâmica e amigável!
+    const c = AC[a] ?? {
+      lbl: a.replace(/_/g, ' ').toUpperCase(),
+      unit: '',
+      min: 0,
+      max: 100,
+      colors: ['#00d4ff','#22c55e','#eab308','#f97316','#ef4444'],
+      thr: [20,40,60,80]
+    };
+    
+    const validSensors = SENSORS.filter(s => s.data[a] !== undefined && s.data[a] !== null);
+    const avg = validSensors.length > 0 
+      ? (validSensors.reduce((t, s) => t + Number(s.data[a]), 0) / validSensors.length).toFixed(1)
+      : '0.0';
+
     return `<button class="ab${a === attrActive ? ' on' : ''}" id="ab-${a}" onclick="window.__ui.setAttr('${a}')">
-      <span style="font-size:8px;text-transform:uppercase;letter-spacing:.06em">${c.lbl}</span>
+      <span style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;" title="${c.lbl}">${c.lbl}</span>
       <span class="av">${avg}<span style="font-size:8px">${c.unit}</span></span>
     </button>`;
   }).join('');
@@ -121,9 +133,16 @@ export function renderAttrBtns(attrs) {
 
 /* ── LEGENDA ─────────────────────────────────────────────────────── */
 export function renderLegend() {
-  const c   = AC[attrActive];
+  const c = AC[attrActive] ?? {
+    lbl: attrActive.replace(/_/g, ' ').toUpperCase(),
+    unit: '',
+    min: 0,
+    max: 100,
+    colors: ['#00d4ff','#22c55e','#eab308','#f97316','#ef4444'],
+    thr: [20,40,60,80]
+  };
   const el  = document.getElementById('leg-attr');
-  if (!c || !el) return;
+  if (!el) return;
 
   el.innerHTML = `
     <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px">${c.lbl} (${c.unit})</div>

@@ -57,8 +57,12 @@ export const MKS = {};
    HELPERS DE COR — exportados para map.js e ui.js
    ══════════════════════════════════════════════════════ */
 export function attrColor(attr, v) {
-  const c = AC[attr];
-  if (!c) return '#00d4ff';
+  const c = AC[attr] ?? {
+    min: 0,
+    max: 100,
+    colors: ['#00d4ff','#22c55e','#eab308','#f97316','#ef4444'],
+    thr: [20,40,60,80]
+  };
   const t = c.thr, cl = c.colors;
   if (v < t[0]) return cl[0];
   if (v < t[1]) return cl[1];

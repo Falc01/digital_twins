@@ -40,9 +40,23 @@ services:
     volumes:
       - ./infra/dados:/infra/dados
       - ./qgis_integration:/qgis_integration
-    # Porta exposta internamente para o Nginx.
     expose:
       - "80"
+
+  # 3b. Automação Headless do Projeto QGIS (Watcher Daemon)
+  qgis-watcher:
+    image: qgis/qgis-server:latest
+    container_name: gd-qgis-watcher
+    restart: always
+    environment:
+      - QGIS_PROJECT_FILE=/infra/dados/projeto_iot.qgz
+      - PYTHONPATH=/usr/share/qgis/python
+    volumes:
+      - ./infra/dados:/infra/dados
+      - ./qgis_integration:/qgis_integration
+    entrypoint: ["python3", "/qgis_integration/qgis_bridge/watcher_headless.py"]
+    depends_on:
+      - backend
 
   # 4. Gateway de Entrada / Proxy Reverso (Nginx)
   nginx:
@@ -57,3 +71,4 @@ services:
       - backend
       - frontend
       - qgis-server
+      - qgis-watcher
