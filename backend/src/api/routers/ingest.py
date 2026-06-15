@@ -59,6 +59,15 @@ async def ingest_file(
         rows_after = after_table.row_count
         ingested = rows_after - rows_before
 
+        # Sincroniza imediatamente o GeoPackage e o CSV no Datalake
+        try:
+            from qgis_bridge.exporter import export_csv, export_gpkg
+            export_csv(after_table, mgr.folder)
+            export_gpkg(after_table, mgr.folder)
+            print(f"[ingest] Tabela {final_table} exportada para CSV/GPKG imediatamente após upload.")
+        except Exception as e:
+            print(f"[ingest] Falha na exportação imediata de {final_table} para CSV/GPKG: {e}")
+
         # Atualiza status/telemetria simples (arquivo no datalake)
         _write_status(final_table, ingested)
 

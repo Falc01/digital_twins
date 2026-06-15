@@ -7,6 +7,7 @@ Usado pelo frontend externo para descobrir dados e buscar leituras.
 from __future__ import annotations
 
 from typing import Optional
+from pathlib import Path
 
 from fastapi import APIRouter, Query, HTTPException, Body
 
@@ -18,6 +19,7 @@ from src.api.schemas import (
 from dyntable.data._core import DynRow
 from dyntable.data._types import DynType
 from dyntable.logic.table_manager import TableNotFoundError, TableAlreadyExistsError
+from shared.config import DATA_DIR
 
 router = APIRouter(prefix="/tables", tags=["tables"])
 
@@ -43,6 +45,9 @@ def create_table(payload: dict = Body(...), mgr: TableManagerDep = None):
 def delete_table(name: str, mgr: TableManagerDep = None):
     try:
         mgr.delete(name)
+        # Limpar os arquivos de exportação correspondentes (CSV e GeoPackage)
+        for ext in (".csv", ".gpkg", ".gpkg-wal", ".gpkg-shm"):
+            Path(Path(mgr.folder) / f"{name}{ext}").unlink(missing_ok=True)
     except TableNotFoundError:
         raise HTTPException(status_code=404, detail=f"Tabela '{name}' não encontrada")
 
@@ -100,6 +105,16 @@ def get_rows(
     )
 
 
+def _sync_exports(table, folder: str) -> None:
+    try:
+        from qgis_bridge.exporter import export_csv, export_gpkg
+        export_csv(table, folder)
+        export_gpkg(table, folder)
+        print(f"[tables] Tabela {table.name} exportada para CSV/GPKG após alteração de coluna.")
+    except Exception as e:
+        print(f"[tables] Falha ao sincronizar exportações pós-modificação de {table.name}: {e}")
+
+
 @router.post("/{name}/columns", status_code=201)
 def add_column(name: str, payload: dict = Body(...), mgr: TableManagerDep = None):
     if not mgr.exists(name):
@@ -107,6 +122,7 @@ def add_column(name: str, payload: dict = Body(...), mgr: TableManagerDep = None
     table = mgr.get(name)
     table.add_column(payload["name"], DynType[payload["type"]], payload.get("nullable", True))
     mgr.save(table)
+    _sync_exports(table, mgr.folder)
     return {"column": payload["name"]}
 
 
@@ -117,6 +133,7 @@ def remove_column(name: str, column_name: str, mgr: TableManagerDep = None):
     table = mgr.get(name)
     table.remove_column(column_name)
     mgr.save(table)
+    _sync_exports(table, mgr.folder)
 
 
 @router.patch("/{name}/columns/{column_name}")
@@ -134,6 +151,7 @@ def rename_column(
     table = mgr.get(name)
     table.rename_column(column_name, new_name)
     mgr.save(table)
+    _sync_exports(table, mgr.folder)
     return {"column": new_name}
 
 
@@ -152,4 +170,5 @@ def rename_column_post(
     table = mgr.get(name)
     table.rename_column(column_name, new_name)
     mgr.save(table)
+    _sync_exports(table, mgr.folder)
     return {"column": new_name}
