@@ -1,3 +1,0 @@
-"""
-Módulo QGIS Bridge
-"""
