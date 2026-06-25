@@ -160,11 +160,13 @@ html, body {
 .ly-lbl em { font-style: normal; font-family: var(--fm); font-size: 9px; color: var(--t2); margin-left: 4px; }
 
 /* Attr buttons */
-.ag   { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.ab   { padding: 7px 6px; border-radius: var(--r); border: 1px solid var(--bdr2); background: transparent; color: var(--t1); font-family: var(--fm); font-size: 9px; cursor: pointer; text-align: center; transition: all var(--tr); }
+.ag   { display: flex; flex-direction: column; gap: 6px; }
+.ab   { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: var(--r); border: 1px solid var(--bdr2); background: transparent; color: var(--t1); font-family: var(--fm); font-size: 10px; cursor: pointer; transition: all var(--tr); text-align: left; width: 100%; }
 .ab:hover { background: var(--bg3); color: var(--t0); border-color: var(--cy); }
 .ab.on    { background: var(--cy15); border-color: var(--cy); color: var(--cy); }
-.ab .av   { display: block; font-size: 13px; font-weight: 500; margin-top: 1px; color: inherit; }
+.ab-lbl   { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-right: 8px; }
+.ab .av   { font-size: 12px; font-weight: 600; color: inherit; flex-shrink: 0; }
+.ab-unit  { font-size: 8px; margin-left: 2px; opacity: 0.8; }
 
 /* Sensor list */
 .si      { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--r); cursor: pointer; transition: background var(--tr); margin-bottom: 1px; }
@@ -212,7 +214,9 @@ html, body {
 .pu-hd    { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--bdr); }
 .pu-nm    { font-family: var(--fd); font-size: 11px; font-weight: 700; color: var(--t0); }
 .pu-id    { font-family: var(--fm); font-size: 9px; color: var(--t2); margin-top: 2px; }
-.pu-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.pu-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+.pu-grid::-webkit-scrollbar { width: 3px; }
+.pu-grid::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
 .pu-card  { background: var(--bg1); border: 1px solid var(--bdr); border-radius: 4px; padding: 5px 8px; }
 .pu-lbl   { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--t2); margin-bottom: 2px; }
 .pu-val   { font-family: var(--fm); font-size: 15px; font-weight: 500; }

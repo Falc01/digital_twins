@@ -17,6 +17,13 @@ Ver:
 Este módulo é o coração do backend de dados e deve permanecer com dependências mínimas.
 """
 
+# Registrar aliases de módulos legados em sys.modules para retrocompatibilidade com tabelas .dyndb antigas salvas via pickle.
+import sys
+from .data import _core, _matrix, _types
+sys.modules['dyntable._core'] = _core
+sys.modules['dyntable._matrix'] = _matrix
+sys.modules['dyntable._types'] = _types
+
 from .data._core import DynTable, DynRow
 from .data._types import DynType, DynColumn, DynCell
 from .logic.table_manager import TableManager, TableNotFoundError, TableAlreadyExistsError

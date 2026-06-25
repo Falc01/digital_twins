@@ -9,7 +9,7 @@
 
 /* ── BASE URLs (ajuste conforme o ambiente) ─────────────────────── */
 export const API_BASE   = '/api/v1';
-export const QGIS_BASE  = 'http://localhost:8080';
+export const QGIS_BASE  = window.location.origin;
 
 /* ── STATUS · GET /api/v1/status ───────────────────────────────── */
 /**
@@ -45,19 +45,26 @@ export async function fetchSensorById(id) {
   return res.json();
 }
 
-/* ── PATCH NOME · PATCH /api/v1/sensors/:id ────────────────────── */
+/* ── PATCH SENSOR · PATCH /api/v1/sensors/:id ───────────────────── */
 /**
- * Persiste a renomeação de um sensor no backend.
- * Retorna: { id, name } com o nome atualizado.
+ * Persiste atualizações de campos de um sensor no backend (ex: nome, lat, lng).
+ * Retorna: { id, name, lat, lng } atualizado.
  */
-export async function patchSensorName(id, newName) {
+export async function patchSensor(id, fields) {
   const res = await fetch(`${API_BASE}/sensors/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: newName }),
+    body: JSON.stringify(fields),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status} ao renomear ${id}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ao atualizar sensor ${id}`);
   return res.json();
+}
+
+/**
+ * Persiste a renomeação de um sensor no backend.
+ */
+export async function patchSensorName(id, newName) {
+  return patchSensor(id, { name: newName });
 }
 
 /* ── WFS DescribeFeatureType · QGIS Server ──────────────────────── */
@@ -95,4 +102,39 @@ export async function fetchWFSSchema(typeName = 'sensores') {
   if (!featureType) throw new Error('Resposta WFS sem featureTypes.');
 
   return featureType.properties ?? [];
+}
+
+/* ── DATALAKE TABLES · GET /api/v1/tables ───────────────────────── */
+/**
+ * Busca todas as tabelas dinâmicas do DataLake.
+ * Retorna: { tables: string[] }
+ */
+export async function fetchTables() {
+  const res = await fetch(`${API_BASE}/tables`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} em /api/v1/tables`);
+  return res.json();
+}
+
+/* ── ACTIVATE TABLE · POST /api/v1/tables/:name/active ──────────── */
+/**
+ * Muda a fonte de dados ativa do DataLake.
+ */
+export async function activateTable(tableName) {
+  const res = await fetch(`${API_BASE}/tables/${encodeURIComponent(tableName)}/active`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ao ativar tabela ${tableName}`);
+  return res.json();
+}
+
+/* ── DELETE TABLE · DELETE /api/v1/tables/:name ─────────────────── */
+/**
+ * Exclui uma tabela dinâmica do DataLake.
+ */
+export async function deleteTable(tableName) {
+  const res = await fetch(`${API_BASE}/tables/${encodeURIComponent(tableName)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status} ao deletar tabela ${tableName}`);
+  return true;
 }

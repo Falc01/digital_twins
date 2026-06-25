@@ -16,6 +16,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
+import json
+from pathlib import Path
 
 from dyntable.data._core import DynTable
 from shared.config import (
@@ -24,9 +26,32 @@ from shared.config import (
     QGIS_CRS,
     QGIS_LAT_COLUMN,
     QGIS_LON_COLUMN,
+    DATA_DIR,
 )
 
 _EXT_DYNDB = ".dyndb"
+
+def load_metadata() -> dict:
+    metadata_file = Path(DATA_DIR) / "sensors_metadata.json"
+    if metadata_file.exists():
+        try:
+            data = json.loads(metadata_file.read_text(encoding="utf-8"))
+            normalized = {}
+            for k, v in data.items():
+                if isinstance(v, str):
+                    normalized[k] = {"name": v, "lat": None, "lng": None}
+                elif isinstance(v, dict):
+                    normalized[k] = {
+                        "name": v.get("name", f"Sensor {k}"),
+                        "lat": v.get("lat"),
+                        "lng": v.get("lng"),
+                    }
+                else:
+                    normalized[k] = {"name": f"Sensor {k}", "lat": None, "lng": None}
+            return normalized
+        except Exception:
+            pass
+    return {}
 
 
 def detect_coordinate_columns(
@@ -219,28 +244,32 @@ def save_to_gpkg(gpkg_path: str, table: DynTable, crs: str = QGIS_CRS) -> str:
         skipped_no_coords = 0
         min_x = min_y = max_x = max_y = None
 
-        # Coordenadas fixas dos 5 sensores do Pelourinho para Fallback Espacial
-        PELOURINHO_COORDS = [
-            (-12.9745, -38.5120),  # Sensor 1
-            (-12.9745, -38.5085),  # Sensor 2
-            (-12.9735, -38.5102),  # Sensor 3
-            (-12.9725, -38.5120),  # Sensor 4
-            (-12.9725, -38.5085),  # Sensor 5
-        ]
+        metadata = load_metadata()
 
         for idx, row in enumerate(table):
             lat = row[lat_col] if lat_col else None
             lon = row[lon_col] if lon_col else None
             if lat is None or lon is None:
-                # Injeta coordenadas do Pelourinho de forma cíclica
-                lat, lon = PELOURINHO_COORDS[idx % len(PELOURINHO_COORDS)]
+                sensor_idx = (idx % 5) + 1
+                sensor_id = f"SNS-{sensor_idx:03d}"
+                sensor_meta = metadata.get(sensor_id, {})
+                lat = sensor_meta.get("lat")
+                lon = sensor_meta.get("lng")
             
-            wkb = _wkb_point(float(lon), float(lat))
-            geom_blob = _gpkg_blob(srs_id, wkb)
-            min_x = lon if min_x is None else min(min_x, lon)
-            max_x = lon if max_x is None else max(max_x, lon)
-            min_y = lat if min_y is None else min(min_y, lat)
-            max_y = lat if max_y is None else max(max_y, lat)
+            if lat is not None and lon is not None:
+                try:
+                    lat_f = float(str(lat).replace(",", "."))
+                    lon_f = float(str(lon).replace(",", "."))
+                    wkb = _wkb_point(lon_f, lat_f)
+                    geom_blob = _gpkg_blob(srs_id, wkb)
+                    min_x = lon_f if min_x is None else min(min_x, lon_f)
+                    max_x = lon_f if max_x is None else max(max_x, lon_f)
+                    min_y = lat_f if min_y is None else min(min_y, lat_f)
+                    max_y = lat_f if max_y is None else max(max_y, lat_f)
+                except (ValueError, TypeError):
+                    geom_blob = None
+            else:
+                geom_blob = None
 
             values = [row.id, row.created_at_str]
             values.extend(row[col] for col in table.column_names)

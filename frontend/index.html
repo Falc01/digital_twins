@@ -108,6 +108,17 @@
       </div>
     </div>
 
+    <!-- Gerenciar DataLake -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('dl')">
+        <span class="sec-t">📊 Gerenciar DataLake</span>
+        <span class="sec-ch o" id="ch-dl">▾</span>
+      </div>
+      <div class="sec-b" id="sb-dl">
+        <div id="datalake-tables-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+
     <!-- Variável de Sensor -->
     <div class="sec">
       <div class="sec-h" onclick="window.__ui.togSec('vr')">
@@ -138,6 +149,17 @@
             <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sda"></span><span style="color:var(--t1)">Crítico</span></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Geolocalização Pendente -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('gp')">
+        <span class="sec-t">📍 Geolocalização Pendente</span>
+        <span class="sec-ch o" id="ch-gp">▾</span>
+      </div>
+      <div class="sec-b" id="sb-gp">
+        <div id="pending-sensors-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
     </div>
 
@@ -205,7 +227,7 @@
      ══════════════════════════════════════════════════════════════ -->
 <script>
   // Configurações globais antes de carregar os módulos
-  window.QGIS_BASE = 'http://localhost:8080';
+  window.QGIS_BASE = window.location.origin;
 </script>
 <script type="module" src="js/app.js"></script>
 

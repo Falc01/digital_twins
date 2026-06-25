@@ -11,9 +11,9 @@
  *  - Relógio em tempo real
  */
 
-import { AC, SENSORS, MKS, attrActive, setAttrActive, sensorColor } from './app.js';
-import { renderSensors, updateHeatmap, puContent, togLayer } from './map.js';
-import { fetchStatus, patchSensorName } from './api.js';
+import { AC, SENSORS, PENDING_SENSORS, TABLES, activeTable, MKS, attrActive, setAttrActive, sensorColor, reloadData } from './app.js';
+import { renderSensors, updateHeatmap, puContent, togLayer, startDefinePosition } from './map.js';
+import { fetchStatus, patchSensorName, activateTable, deleteTable } from './api.js';
 
 /* ── ESTADO DA UI ────────────────────────────────────────────────── */
 export let selId = null;
@@ -77,6 +77,8 @@ export function renderList() {
     const u      = AC[attrActive]?.unit ?? '';
     const col    = sensorColor(s);
     const dotCls = s.st === 'alert' ? 'sda' : s.st === 'warning' ? 'sdw' : 'sdo';
+    const hasVal = v !== undefined && v !== null && !isNaN(Number(v));
+    const displayVal = hasVal ? v : 'N/A';
 
     return `<div class="si${selId === s.id ? ' sel' : ''}" id="si-${s.id}" onclick="window.__ui.selSensor('${s.id}')">
       <span class="sd-dot ${dotCls}"></span>
@@ -84,7 +86,7 @@ export function renderList() {
         <div class="sn-name" title="${s.name}" style="font-weight:600">${s.name}</div>
         <div class="sn-id">${s.id} · ${s.blk}</div>
       </div>
-      <div class="sn-val" style="color:${col}">${v}<span style="font-size:9px;color:var(--t2)">${u}</span></div>
+      <div class="sn-val" style="color:${col}">${displayVal}<span style="font-size:9px;color:var(--t2)">${u}</span></div>
     </div>`;
   }).join('');
 }
@@ -101,7 +103,8 @@ export function renderList() {
  * @param {string[]} [attrs] - Lista de atributos descobertos via WFS
  */
 export function renderAttrBtns(attrs) {
-  const resolvedAttrs = attrs ?? Object.keys(SENSORS[0]?.data ?? {});
+  const ignored = ['id', 'created_at', 'geometry', 'geom', 'latitude', 'longitude', 'sensor_id', 'name', 'blk', 'st', 'ts'];
+  const resolvedAttrs = attrs ?? Object.keys(SENSORS[0]?.data ?? {}).filter(k => !ignored.includes(k.toLowerCase()));
   const acEl  = document.getElementById('ac');
   const agEl  = document.getElementById('ag');
   if (!agEl) return;
@@ -125,8 +128,8 @@ export function renderAttrBtns(attrs) {
       : '0.0';
 
     return `<button class="ab${a === attrActive ? ' on' : ''}" id="ab-${a}" onclick="window.__ui.setAttr('${a}')">
-      <span style="font-size:8px;text-transform:uppercase;letter-spacing:.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;" title="${c.lbl}">${c.lbl}</span>
-      <span class="av">${avg}<span style="font-size:8px">${c.unit}</span></span>
+      <span class="ab-lbl" title="${c.lbl}">${c.lbl}</span>
+      <span class="av">${avg}<span class="ab-unit">${c.unit}</span></span>
     </button>`;
   }).join('');
 }
@@ -243,6 +246,84 @@ export function togSec(id) {
   if (ch) ch.classList.toggle('o', !visible);
 }
 
+/* ── LISTA DE GEOLOCALIZAÇÃO PENDENTE ────────────────────────────── */
+export function renderPendingList() {
+  const gpEl = document.getElementById('pending-sensors-list');
+  if (!gpEl) return;
+  
+  if (PENDING_SENSORS.length === 0) {
+    gpEl.innerHTML = `<div style="font-size:11px;color:var(--t2);padding:6px;text-align:center">Nenhuma pendência</div>`;
+    return;
+  }
+  
+  gpEl.innerHTML = PENDING_SENSORS.map((s) => {
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);padding:6px 8px;border-radius:4px;margin-bottom:2px;border:1px solid var(--bdr)">
+      <div style="flex:1;min-width:0;margin-right:6px">
+        <div style="font-weight:600;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.name}">${s.name}</div>
+        <div style="font-family:var(--fm);font-size:9px;color:var(--t2)">${s.id}</div>
+      </div>
+      <button class="btn-edit" onclick="window.__ui.startDefinePosition('${s.id}')" style="padding:2px 6px;font-size:9px;white-space:nowrap">Definir Posição</button>
+    </div>`;
+  }).join('');
+}
+
+/* ── GERENCIAR DATALAKE (TABELAS) ───────────────────────────────── */
+export function renderTablesList() {
+  const dlEl = document.getElementById('datalake-tables-list');
+  if (!dlEl) return;
+  
+  if (TABLES.length === 0) {
+    dlEl.innerHTML = `<div style="font-size:11px;color:var(--t2);padding:6px;text-align:center">Nenhuma tabela</div>`;
+    return;
+  }
+  
+  dlEl.innerHTML = TABLES.map((tName) => {
+    const isActive = tName === activeTable;
+    const activeText = isActive ? 'Ativa' : 'Inativa';
+    const activeColor = isActive ? 'var(--gn)' : 'var(--t2)';
+    const btnActiveHtml = isActive 
+      ? `<span class="badge b-gn" style="font-size:8px;padding:1px 4px">ATIVADA</span>`
+      : `<button class="btn-edit" onclick="window.__ui.handleActivateTable('${tName}')" style="padding:2px 6px;font-size:9px">Ativar</button>`;
+      
+    const btnDeleteHtml = isActive 
+      ? `<span style="font-size:11px;color:var(--t2);opacity:0.5;margin-left:4px;cursor:not-allowed" title="Tabela ativa não pode ser excluída">🗑️</span>`
+      : `<span onclick="window.__ui.handleDeleteTable('${tName}')" style="font-size:11px;color:var(--rd);margin-left:6px;cursor:pointer;display:inline-block" title="Excluir tabela">🗑️</span>`;
+
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);padding:6px 8px;border-radius:4px;margin-bottom:2px;border:1px solid var(--bdr)">
+      <div style="flex:1;min-width:0;margin-right:6px">
+        <div style="font-weight:600;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${isActive ? 'var(--cy)' : 'var(--t0)'}" title="${tName}">${tName}</div>
+        <div style="font-size:9px;color:${activeColor}">${activeText}</div>
+      </div>
+      <div style="display:flex;align-items:center">
+        ${btnActiveHtml}
+        ${btnDeleteHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+export async function handleActivateTable(tableName) {
+  try {
+    await activateTable(tableName);
+    await reloadData();
+  } catch (err) {
+    console.error('[ui] Erro ao ativar tabela:', err);
+    alert(`Erro ao ativar tabela: ${err.message}`);
+  }
+}
+
+export async function handleDeleteTable(tableName) {
+  if (confirm(`Deseja realmente excluir a tabela "${tableName}"? Esta ação não pode ser desfeita.`)) {
+    try {
+      await deleteTable(tableName);
+      await reloadData();
+    } catch (err) {
+      console.error('[ui] Erro ao deletar tabela:', err);
+      alert(`Erro ao deletar tabela: ${err.message}`);
+    }
+  }
+}
+
 /* ── EXPÕE API PÚBLICA PARA CHAMADAS INLINE DO HTML ─────────────── */
 window.__ui = {
   selSensor,
@@ -251,4 +332,7 @@ window.__ui = {
   saveName,
   togSec,
   togLayer,
+  startDefinePosition,
+  handleActivateTable,
+  handleDeleteTable,
 };

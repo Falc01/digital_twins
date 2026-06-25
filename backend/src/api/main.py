@@ -123,7 +123,9 @@ app.add_middleware(
 
 # Routers
 # Rotas prefixadas para o Frontend
+app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(ingest.router, prefix="/api")
+app.include_router(tables.router, prefix="/api/v1")
 app.include_router(tables.router, prefix="/api")
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(status.router, prefix="/api")

@@ -172,3 +172,24 @@ def rename_column_post(
     mgr.save(table)
     _sync_exports(table, mgr.folder)
     return {"column": new_name}
+
+
+@router.post("/{name}/active")
+def activate_table(name: str, mgr: TableManagerDep = None):
+    if not mgr.exists(name):
+        raise HTTPException(status_code=404, detail=f"Tabela '{name}' não encontrada")
+    
+    table = mgr.get(name)
+    
+    import json
+    from datetime import datetime
+    status_path = Path(DATA_DIR) / "status.json"
+    data = {
+        "ultima_atualizacao": datetime.now().isoformat(timespec="seconds"),
+        "status": "sucesso",
+        "tabela": name,
+        "rows_adicionados": table.row_count,
+    }
+    status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    
+    return {"status": "sucesso", "active_table": name}

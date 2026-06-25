@@ -9,8 +9,9 @@
  *  - Renderizar marcadores de sensor e mapa de calor
  */
 
-import { AC, attrActive, MKS, SENSORS, sensorColor, attrColor } from './app.js';
+import { AC, attrActive, MKS, SENSORS, PENDING_SENSORS, sensorColor, attrColor, reloadData } from './app.js';
 import { selSensor } from './ui.js';
+import { patchSensor } from './api.js';
 
 /* ── INSTÂNCIAS GLOBAIS DO MAPA ─────────────────────────────────── */
 export let map;
@@ -34,8 +35,8 @@ export const layerOn = {
 /* ── INICIALIZAÇÃO DO MAPA ──────────────────────────────────────── */
 export function initMap() {
   map = L.map('mp', {
-    center: [-12.9750, -38.4600],
-    zoom: 13,
+    center: [-12.9735, -38.5100],
+    zoom: 17,
     zoomControl: true,
     attributionControl: true,
   });
@@ -57,8 +58,8 @@ export function initMap() {
 
     /* Mapa de calor calibrado pela temperatura */
     heat: L.heatLayer([], {
-      radius:   45,
-      blur:     25,
+      radius:   85,
+      blur:     35,
       maxZoom:  15,
       gradient: {
         0.4: '#00d4ff',
@@ -139,6 +140,8 @@ function mkIcon(s) {
   const v   = s.data[attrActive];
   const u   = AC[attrActive]?.unit ?? '';
   const ani = s.st === 'alert' ? 'prf .7s' : 'pr 2.4s';
+  const hasVal = v !== undefined && v !== null && !isNaN(Number(v));
+  const displayVal = hasVal ? v : 'N/A';
 
   const html = `
     <div style="position:relative;width:40px;height:40px;">
@@ -146,7 +149,7 @@ function mkIcon(s) {
       <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;background:rgba(3,13,28,.75);border:2px solid ${col};display:flex;align-items:center;justify-content:center;">
         <div style="width:6px;height:6px;border-radius:50%;background:${col};"></div>
       </div>
-      <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:rgba(7,21,38,.9);border:1px solid ${col};border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:9px;color:${col};white-space:nowrap;">${v}${u}</div>
+      <div style="position:absolute;top:-16px;left:50%;transform:translateX(-50%);background:rgba(7,21,38,.9);border:1px solid ${col};border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:9px;color:${col};white-space:nowrap;">${displayVal}${u}</div>
     </div>`;
 
   return L.divIcon({ html, className: '', iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -22] });
@@ -160,15 +163,24 @@ export function puContent(s) {
   };
   const [sc, sl] = stMap[s.st] ?? ['#888', 'N/A'];
 
-  const cards = Object.entries(s.data).map(([k, v]) => {
-    const c = AC[k];
-    if (!c) return '';
-    const col = attrColor(k, v);
-    return `<div class="pu-card">
-      <div class="pu-lbl">${c.lbl}</div>
-      <div class="pu-val" style="color:${col}">${v}<span class="pu-unit"> ${c.unit}</span></div>
-    </div>`;
-  }).join('');
+  const ignored = ['id', 'created_at', 'geometry', 'geom', 'latitude', 'longitude', 'sensor_id', 'name', 'blk', 'st', 'ts'];
+  const cards = Object.entries(s.data)
+    .filter(([k]) => !ignored.includes(k.toLowerCase()))
+    .map(([k, v]) => {
+      const c = AC[k] ?? {
+        lbl: k.replace(/_/g, ' ').toUpperCase(),
+        unit: '',
+        min: 0,
+        max: 100,
+        colors: ['#00d4ff','#22c55e','#eab308','#f97316','#ef4444'],
+        thr: [20,40,60,80]
+      };
+      const col = attrColor(k, v);
+      return `<div class="pu-card">
+        <div class="pu-lbl" title="${c.lbl}">${c.lbl}</div>
+        <div class="pu-val" style="color:${col}">${v}<span class="pu-unit"> ${c.unit}</span></div>
+      </div>`;
+    }).join('');
 
   return `<div class="pu">
     <div class="pu-hd">
@@ -207,10 +219,69 @@ export function updateHeatmap() {
   const heatLayer = activeLayers.heat;
   if (!heatLayer) return;
 
-  const { min, max } = AC.temperatura;
-  const points = SENSORS.map((s) => {
-    const intensity = (s.data.temperatura - min) / (max - min);
-    return [s.lat, s.lng, intensity];
-  });
+  const config = AC[attrActive] ?? { min: 0, max: 100 };
+  const min = config.min;
+  const max = config.max;
+  const points = SENSORS
+    .filter((s) => s.data && s.data[attrActive] !== undefined && s.data[attrActive] !== null && !isNaN(Number(s.data[attrActive])))
+    .map((s) => {
+      const val = Number(s.data[attrActive]);
+      let intensity = (val - min) / (max - min);
+      intensity = Math.max(0.0, Math.min(1.0, intensity)); // clamp between 0 and 1
+      return [s.lat, s.lng, intensity];
+    });
   heatLayer.setLatLngs(points);
+}
+
+/* ── GEOLOCALIZAÇÃO PENDENTE ─────────────────────────────────────── */
+let activePositioningSensorId = null;
+
+export function startDefinePosition(sensorId) {
+  activePositioningSensorId = sensorId;
+  const mapContainer = document.getElementById('mp');
+  if (mapContainer) {
+    mapContainer.style.cursor = 'crosshair';
+  }
+  
+  const wmsLbl = document.getElementById('wms-lbl');
+  if (wmsLbl) {
+    wmsLbl.textContent = '📍 MODO INSTALAÇÃO: Clique no mapa para posicionar o sensor';
+  }
+  
+  map.on('click', onMapClickForInstallation);
+}
+
+async function onMapClickForInstallation(e) {
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+  
+  const mapContainer = document.getElementById('mp');
+  if (mapContainer) {
+    mapContainer.style.cursor = '';
+  }
+  map.off('click', onMapClickForInstallation);
+  
+  const wmsLbl = document.getElementById('wms-lbl');
+  if (wmsLbl) {
+    wmsLbl.textContent = 'WMS → QGIS Server :8080';
+  }
+  
+  if (!activePositioningSensorId) return;
+  
+  const s = PENDING_SENSORS.find((x) => x.id === activePositioningSensorId);
+  const name = s ? s.name : `Sensor ${activePositioningSensorId}`;
+  
+  const confirmed = confirm(`Deseja instalar o ${name} nesta coordenada?\nLatitude: ${lat.toFixed(6)}\nLongitude: ${lng.toFixed(6)}`);
+  
+  if (confirmed) {
+    try {
+      await patchSensor(activePositioningSensorId, { name, lat, lng });
+      await reloadData();
+    } catch (err) {
+      console.error('[map] Erro ao salvar posição do sensor:', err);
+      alert(`Erro ao instalar sensor: ${err.message}`);
+    }
+  }
+  
+  activePositioningSensorId = null;
 }

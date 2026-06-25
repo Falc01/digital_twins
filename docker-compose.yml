@@ -13,6 +13,7 @@ services:
       - DATA_DIR=/app/infra/dados
     volumes:
       - ./infra/dados:/app/infra/dados
+      - ./backend:/app
     # Porta exposta internamente para o Nginx. Não precisa mapear para o host, pois o Nginx centraliza o acesso.
     expose:
       - "8000"
@@ -24,6 +25,9 @@ services:
       dockerfile: Dockerfile
     container_name: gd-frontend
     restart: always
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     # Porta exposta internamente para o Nginx.
     expose:
       - "3000"

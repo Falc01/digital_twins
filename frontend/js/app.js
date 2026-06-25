@@ -9,11 +9,12 @@
  *  - Executar autodescoberta WFS e injetar resultado em renderAttrBtns()
  */
 
-import { initMap, renderSensors, togLayer } from './map.js';
-import { fetchSensors, fetchStatus, fetchWFSSchema } from './api.js';
+import { initMap, renderSensors, togLayer, activeLayers } from './map.js';
+import { fetchSensors, fetchStatus, fetchWFSSchema, fetchTables } from './api.js';
 import {
   renderList, renderAttrBtns, renderLegend,
   topStats, loadStatus, tick, togSec,
+  renderPendingList, renderTablesList,
 } from './ui.js';
 
 /* ══════════════════════════════════════════════════════
@@ -29,6 +30,9 @@ import {
  * TODO: remover o mock quando a rota GET /api/v1/sensors estiver disponível.
  */
 export let SENSORS = [];
+export let PENDING_SENSORS = [];
+export let TABLES = [];
+export let activeTable = '';
 
 /**
  * AC (Attribute Config): metadados de cada variável de sensor.
@@ -74,7 +78,11 @@ export function attrColor(attr, v) {
 export function sensorColor(s) {
   if (s.st === 'alert')   return '#ef4444';
   if (s.st === 'warning') return '#f59e0b';
-  return attrColor(attrActive, s.data[attrActive]);
+  const val = s.data[attrActive];
+  if (val === undefined || val === null || isNaN(Number(val))) {
+    return '#64748b'; // Neutral gray color for missing readings
+  }
+  return attrColor(attrActive, val);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -128,62 +136,86 @@ const SENSORS_MOCK = [
 /* ══════════════════════════════════════════════════════
    INIT — orquestrador principal
    ══════════════════════════════════════════════════════ */
-async function init() {
-  /* 1. Carrega sensores do backend; cai para mock se API offline */
+export async function reloadData() {
+  /* Limpa estados locais */
+  SENSORS.length = 0;
+  PENDING_SENSORS.length = 0;
+  TABLES.length = 0;
+
+  /* Limpa marcadores no mapa */
+  if (activeLayers && activeLayers.sns) {
+    activeLayers.sns.clearLayers();
+  }
+
+  /* 1. Busca todas as tabelas dinâmicas */
+  try {
+    const tblData = await fetchTables();
+    TABLES.push(...(tblData.tables || []));
+  } catch (err) {
+    console.warn('[app] Falha ao carregar lista de tabelas:', err);
+  }
+
+  /* 2. Busca status do backend (atualiza a tabela ativa) */
+  try {
+    const stData = await fetchStatus();
+    activeTable = stData.tabela ?? '';
+  } catch (err) {
+    console.warn('[app] Falha ao carregar status ativo:', err);
+  }
+
+  /* 3. Carrega sensores da API e filtra os pendentes */
   try {
     const data = await fetchSensors();
-    SENSORS.push(...data);
-    console.info(`[app] ${SENSORS.length} sensores carregados da API.`);
+    data.forEach((s) => {
+      if (s.lat === null || s.lng === null || isNaN(s.lat) || isNaN(s.lng)) {
+        PENDING_SENSORS.push(s);
+      } else {
+        SENSORS.push(s);
+      }
+    });
+    console.info(`[app] Sensores ativos: ${SENSORS.length}, pendentes: ${PENDING_SENSORS.length}`);
   } catch (err) {
     console.warn('[app] API de sensores indisponível — usando mock local:', err);
     SENSORS.push(...SENSORS_MOCK);
   }
 
-  /* 2. Inicializa o mapa Leaflet */
-  initMap();
-
-  /* 3. Autodescoberta de atributos via WFS DescribeFeatureType */
+  /* 4. Autodescoberta de atributos via WFS DescribeFeatureType */
   let wfsAttrs = null;
   try {
-    let activeTable = 'sensor_readings_demo';
-    try {
-      const statusData = await fetchStatus();
-      if (statusData.tabela) {
-        activeTable = statusData.tabela;
-      }
-    } catch (e) {
-      console.warn('[app] Falha ao ler tabela ativa do status:', e);
-    }
-
-    const typeName = activeTable.replace(/ /g, '_');
-    const props  = await fetchWFSSchema(typeName);
-    /* Filtra apenas as propriedades numéricas relevantes (xsd:double, xsd:int) */
+    const typeName = (activeTable || 'sensor_readings_demo').replace(/ /g, '_');
+    const props = await fetchWFSSchema(typeName);
+    const ignored = ['id', 'created_at', 'geometry', 'geom', 'latitude', 'longitude', 'sensor_id', 'name', 'blk', 'st', 'ts'];
     wfsAttrs = props
-      .filter((p) => p.type?.includes('double') || p.type?.includes('int'))
+      .filter((p) => p.type?.includes('double') || p.type?.includes('int') || p.type?.includes('decimal') || p.type?.includes('float'))
       .map((p) => p.name)
-      .filter((name) => name in AC);              /* mantém só os que têm config em AC */
+      .filter((name) => !ignored.includes(name.toLowerCase()));
     console.info('[app] Atributos WFS descobertos:', wfsAttrs);
   } catch (err) {
-    console.warn('[app] WFS DescribeFeatureType indisponível — usando introspecção local:', err);
-    /* Fallback: lê as chaves do primeiro sensor (comportamento original) */
     wfsAttrs = null;
   }
 
-  /* 4. Renderiza todos os componentes visuais */
+  /* 5. Renderiza todos os componentes visuais */
   renderSensors();
   renderList();
-  renderAttrBtns(wfsAttrs);   /* passa null para fallback automático */
+  renderPendingList();
+  renderAttrBtns(wfsAttrs);
   renderLegend();
+  renderTablesList();
   topStats();
+}
 
-  /* 5. Carrega status do backend */
-  await loadStatus();
+async function init() {
+  /* Inicializa o mapa Leaflet */
+  initMap();
 
-  /* 6. Inicia relógio */
+  /* Carrega e renderiza todos os dados */
+  await reloadData();
+
+  /* Inicia relógio */
   tick();
   setInterval(tick, 1000);
 
-  /* 7. Polling de status a cada 60s (alinhado com intervalo WAL do FastAPI) */
+  /* Polling de status a cada 60s (alinhado com intervalo WAL do FastAPI) */
   setInterval(loadStatus, 60_000);
 }
 
