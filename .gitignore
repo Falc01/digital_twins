@@ -37,3 +37,10 @@ teste_server/
 # Dependências do Node.js (Frontend)
 frontend/node_modules/
 node_modules/
+
+# Chaves de segurança SSH
+*.key
+*.pub
+*.pem
+
+
