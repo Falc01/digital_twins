@@ -1,66 +1,92 @@
-# Gêmeo Digital IoT — UNIFACS
+# 🌐 Gêmeo Digital IoT — UNIFACS (Pelourinho, Salvador/BA)
 
-Este repositório contém o ecossistema modularizado do projeto de **Gêmeo Digital para Monitoramento IoT** da UNIFACS (Salvador/BA). O sistema integra a ingestão assíncrona de telemetria de sensores, persistência em datalake centralizado, renderização cartográfica via servidor GIS e visualização web em tempo real.
+![Status do Servidor](https://img.shields.io/badge/Servidor_OCI-ONLINE_24%2F7-brightgreen?style=for-the-badge&logo=oracle)
+![Docker Compose](https://img.shields.io/badge/Docker_Compose-5_Containers-blue?style=for-the-badge&logo=docker)
+![QGIS Server](https://img.shields.io/badge/QGIS_Server-Headless_WMS%2FWFS-589632?style=for-the-badge&logo=qgis)
 
----
-
-## 🗺️ Visão Geral dos Módulos
-
-O projeto é dividido em quatro módulos físicos e independentes para facilitar o desenvolvimento paralelo, conteinerização e escalabilidade do sistema:
-
-### 1. Backend (`/backend`)
-* **O que faz:** Camada lógica e de ingestão de dados. É responsável por receber payloads HTTP dos sensores, processá-los na biblioteca de tabelas dinâmicas `dyntable`, gerenciar a matriz local `.dyndb` e persistir em lote (Micro-batching) os dados no banco espacial `.gpkg` usando o SQLite em modo WAL (Write-Ahead Logging) para mitigar travamentos de escrita.
-* **Onde é expresso:** Interface de API REST HTTP construída com **FastAPI** (Python).
-
-### 2. Frontend (`/frontend`)
-* **O que faz:** Painel web interativo baseado em mapas. Consome as geometrias e imagens diretamente do QGIS Server (WMS/WFS) e as variáveis de status/dados de sensores da API do FastAPI. Realiza a autodescoberta dinâmica de atributos via DescribeFeatureType do WFS.
-* **Onde é expresso:** Interface do navegador do usuário final utilizando **Leaflet.js** (HTML5/CSS3/JavaScript ES6) e servida localmente por um servidor estático Node.js.
-
-### 3. Integração QGIS (`/qgis_integration`)
-* **O que faz:** Automação e publicação cartográfica. Contém a biblioteca `qgis_bridge` e os scripts de inicialização (`startup_script.py`) do QGIS Server, responsáveis por carregar o projeto `.qgz` de engenharia do mapa de forma headless e expô-lo via padrões OGC (WMS/WFS).
-* **Onde é expresso:** Servidor de mapas headless (**QGIS Server**).
-
-### 4. Infraestrutura e Datalake (`/infra`)
-* **O que faz:** Núcleo de dados e orquestração. Contém a pasta `/dados` que funciona como o **Datalake Central** (abrigando a base espacial do GeoPackage `.gpkg`, a matriz `.dyndb` e imagens raster de satélite) e a pasta `/docker` destinada a gerenciar o Docker Compose e volumes de disco compartilhados.
-* **Onde é expresso:** Camada de persistência local e empacotamento de containers (Docker).
+Este repositório contém o ecossistema completo e modularizado do projeto de **Gêmeo Digital para Monitoramento de Sensores IoT** da UNIFACS. O sistema realiza a ingestão assíncrona de telemetria de sensores, gerenciamento dinâmico de tabelas no DataLake, renderização cartográfica via servidor GIS headless e visualização em tempo real em um mapa interativo web.
 
 ---
 
-## 🌿 Estrutura de Branches (Fluxo de Trabalho)
+## 🚀 Servidor de Homologação em Tempo Real (Live Demo)
 
-Para otimizar o trabalho de uma equipe de 3 integrantes, o repositório é configurado com isolamento restrito de escopos por ramificação. **Nenhum arquivo ou diretório de módulo é compartilhado entre as branches de desenvolvimento**.
+A aplicação está implantada e operando de forma contínua em uma Máquina Virtual na nuvem da Oracle Cloud Infrastructure (OCI):
 
-### Branches de Consolidação
-* **`main`**: Contém a estrutura unificada estável (todos os módulos consolidados + pasta `documentos/` de especificação). É a branch principal de produção.
-* **`main-legacy`**: Contém estritamente o código legado original histórico do projeto (`old_code/`) para preservação e consulta de compatibilidade.
+🌐 **URL de Acesso ao Vivo:** [http://137.131.211.210:8080](http://137.131.211.210:8080)
 
-### Branches de Desenvolvimento (Escopos Exclusivos)
-Ao fazer o checkout em qualquer uma dessas branches, o seu workspace exibirá **apenas** a pasta correspondente e o `.gitignore`/`README.md`.
-* **`dev-backend`**: Exibe apenas a pasta `/backend` (Trabalho do desenvolvedor Backend).
-* **`dev-frontend`**: Exibe apenas a pasta `/frontend` (Trabalho do desenvolvedor Frontend).
-* **`dev-qgis-integration`**: Exibe apenas a pasta `/qgis_integration` (Trabalho do desenvolvedor SIG/QGIS).
-* **`dev-infra`**: Exibe apenas a pasta `/infra` (Trabalho de DevOps para Docker e banco de dados).
+> [!NOTE]
+> O servidor de homologação conta com os 5 microsserviços rodando via Docker Compose com sincronização automática de arquivos e otimização de memória virtual SWAP.
 
 ---
 
-## 🚀 Como Executar
+## 🗺️ Visão Geral dos Módulos e Arquitetura
+
+O sistema é estruturado em quatro módulos físicos independentes e orquestrados por um gateway Nginx:
+
+```
+                      ┌──────────────────────────────────────────┐
+                      │    Nginx Gateway (Porta 8080 público)     │
+                      └────────────────────┬─────────────────────┘
+                                           │
+         ┌─────────────────────────────────┼─────────────────────────────────┐
+         ▼                                 ▼                                 ▼
+┌──────────────────┐             ┌──────────────────┐             ┌──────────────────┐
+│  Frontend Web    │             │   Backend API    │             │   QGIS Server    │
+│  (Leaflet.js)    │ ──────────► │    (FastAPI)     │ ──────────► │  (WMS / WFS)     │
+└──────────────────┘             └─────────┬────────┘             └─────────┬────────┘
+                                           │                                 │
+                                           ▼                                 ▼
+                                ┌─────────────────────────────────────────────────────┐
+                                │   Datalake Central & Shared Volumes (/infra/dados)  │
+                                │   - SQLite / GeoPackage (.gpkg)                      │
+                                │   - Metadados Dinâmicos (sensors_metadata.json)      │
+                                └─────────────────────────────────────────────────────┘
+```
+
+### 1. Backend API (`/backend`)
+* **Tecnologias:** FastAPI (Python 3.10+), `dyntable`, SQLite/GeoPackage.
+* **Responsabilidade:** Ingestão de planilhas CSV/Excel, CRUD de sensores, gerenciamento de tabelas ativas no DataLake e exportação imediata para o formato espacial `.gpkg`. Possui suporte a tabelas legadas via mapeamento dinâmico de módulos.
+
+### 2. Frontend Web (`/frontend`)
+* **Tecnologias:** Leaflet.js, HTML5, Vanilla CSS3 (com Glassmorphism e Dark Mode), Node.js (Servidor estático).
+* **Responsabilidade:** Interface do usuário final. Exibe o mapa do Pelourinho, lista de sensores ativos, mapas de calor dinâmicos e o **Painel de Geolocalização Pendente**, permitindo que o usuário atribua coordenadas a novos sensores diretamente clicando no mapa.
+
+### 3. Integração QGIS & Watcher (`/qgis_integration`)
+* **Tecnologias:** QGIS Server Headless, Python Watcher Daemon, PyQGIS.
+* **Responsabilidade:** O daemon `watcher_headless.py` monitora a pasta do DataLake em tempo real. Qualquer alteração no banco GeoPackage regera o projeto `.qgz` de engenharia e instrui o QGIS Server a servir as novas camadas WFS/WMS atualizadas de forma transparente.
+
+### 4. Infraestrutura e DataLake (`/infra`)
+* **Tecnologias:** Docker Compose, Nginx Reverse Proxy, Linux SWAP.
+* **Responsabilidade:** Gerenciamento de volumes compartilhados, orquestração dos contêineres e roteamento interno de portas HTTP.
+
+---
+
+## 📚 Documentação Técnica do Projeto
+
+Para conferir os detalhes técnicos de implementação, correções de engenharia e guias de implantação, consulte os documentos abaixo:
+
+* 📖 **[DEPLOY.md](DEPLOY.md):** Guia passo a passo do deploy na Oracle Cloud, configuração de rede (VCN/Security Lists), liberação de portas e otimização de memória SWAP.
+* 🛠️ **[LOG_DESENVOLVIMENTO.md](LOG_DESENVOLVIMENTO.md):** Diário de bordo técnico com todos os problemas de engenharia encontrados durante o desenvolvimento (desserialização Pickle, Nginx port-stripping, fallback WFS) e como foram resolvidos.
+* ⚙️ **[Relatório do Backend](backend/relatorio_refatoracao_backend.md):** Especificação detalhada da refatoração do backend e estrutura de rotas.
+* 🎨 **[Relatório do Frontend](frontend/relatorio_refatoracao_frontend.md):** Guia da arquitetura modular da interface e componentes visuais.
+
+---
+
+## 🛠️ Como Executar Localmente
+
+Caso deseje rodar a stack completa na sua própria máquina de desenvolvimento:
 
 ### Pré-requisitos
-* Python 3.10+ (para Backend e QGIS Integration)
-* Node.js (para Frontend)
-* QGIS Desktop / Server (para renderização cartográfica WMS/WFS)
+* **Docker** e **Docker Compose** instalados.
 
-### Desenvolvimento Local do Frontend
-1. Acesse o diretório:
+### Passos
+1. Clone o repositório:
    ```bash
-   cd frontend
+   git clone https://github.com/Falc01/digital_twins.git
+   cd digital_twins
    ```
-2. Instale as dependências:
+2. Inicie todos os serviços com o Docker Compose:
    ```bash
-   npm install
+   docker compose up -d
    ```
-3. Inicie o servidor de desenvolvimento:
-   ```bash
-   npm run dev
-   ```
-   O painel de controle estará acessível em `http://localhost:3000`.
+3. Acesse o painel local em: `http://localhost:8080`
