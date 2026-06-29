@@ -8,6 +8,30 @@ Este repositório contém o ecossistema completo e modularizado do projeto de **
 
 ---
 
+## 📑 Especificações Técnicas dos Módulos (Acesso Rápido)
+
+Acesse diretamente as especificações detalhadas de cada um dos 10 sub-módulos da arquitetura sem precisar navegar entre pastas:
+
+### 📦 Camada Backend (`/backend`)
+* 📄 **[Motor de Tabelas Dinâmicas (`dyntable_engine`)](docs/modules/modulo_dyntable_engine.md)**: Persistência binária `.dyndb` e aliasing de desserialização legada.
+* 📄 **[API REST FastAPI (`fastapi_api`)](docs/modules/modulo_fastapi_api.md)**: Endpoints HTTP de ingestão, CRUD de sensores e gerenciamento de tabelas.
+* 📄 **[Exportador GeoPackage (`gpkg_exporter`)](docs/modules/modulo_gpkg_exporter.md)**: Sincronização espacial SQLite -> OGC GeoPackage (`.gpkg`).
+
+### 🎨 Camada Frontend (`/frontend`)
+* 📄 **[Core de Cartografia Leaflet (`frontend_mapa_leaflet`)](docs/modules/modulo_frontend_mapa_leaflet.md)**: Inicialização de mapas, basemaps e camadas WFS/WMS/Heatmap.
+* 📄 **[Painel de Geolocalização & Gestão (`frontend_georeferenciamento`)](docs/modules/modulo_frontend_georeferenciamento.md)**: Modo crosshair de alocação de coordenadas por clique e tabelas ativas.
+* 📄 **[Portal de Ingestão & Upload (`frontend_ingestao_upload`)](docs/modules/modulo_frontend_ingestao_upload.md)**: Form de upload de planilhas CSV/Excel e drag-and-drop (`upload.html`).
+
+### 🗺️ Camada de Geoprocessamento GIS (`/qgis_integration`)
+* 📄 **[Watcher GIS Headless (`qgis_watcher_daemon`)](docs/modules/modulo_qgis_watcher_daemon.md)**: Daemon PyQGIS autônomo e regenerador de projetos `.qgz`.
+* 📄 **[Servidor GIS Headless (`qgis_server`)](docs/modules/modulo_qgis_server.md)**: Instância QGIS Server fornecendo serviços OGC WMS/WFS em contêiner.
+
+### 🌐 Camada de Infraestrutura (`/infra` e Nuvem)
+* 📄 **[Gateway Nginx (`infraestrutura_gateway_nginx`)](docs/modules/modulo_infraestrutura_gateway_nginx.md)**: Reverse proxy na porta 8080 e preservação de host/porta.
+* 📄 **[Orquestração & Nuvem OCI (`infraestrutura_orquestracao_oci`)](docs/modules/modulo_infraestrutura_orquestracao_oci.md)**: Docker Compose de 5 serviços e otimização SWAP 4GB Linux.
+
+---
+
 ## 🚀 Servidor de Homologação em Tempo Real (Live Demo)
 
 A aplicação está implantada e operando de forma contínua em uma Máquina Virtual na nuvem da Oracle Cloud Infrastructure (OCI):
@@ -19,7 +43,7 @@ A aplicação está implantada e operando de forma contínua em uma Máquina Vir
 
 ---
 
-## 🗺️ Visão Geral dos Módulos e Arquitetura
+## 🗺️ Visão Geral da Arquitetura
 
 O sistema é estruturado em quatro módulos físicos independentes e orquestrados por um gateway Nginx:
 
@@ -43,32 +67,18 @@ O sistema é estruturado em quatro módulos físicos independentes e orquestrado
                                 └─────────────────────────────────────────────────────┘
 ```
 
-### 1. Backend API (`/backend`)
-* **Tecnologias:** FastAPI (Python 3.10+), `dyntable`, SQLite/GeoPackage.
-* **Responsabilidade:** Ingestão de planilhas CSV/Excel, CRUD de sensores, gerenciamento de tabelas ativas no DataLake e exportação imediata para o formato espacial `.gpkg`. Possui suporte a tabelas legadas via mapeamento dinâmico de módulos.
-
-### 2. Frontend Web (`/frontend`)
-* **Tecnologias:** Leaflet.js, HTML5, Vanilla CSS3 (com Glassmorphism e Dark Mode), Node.js (Servidor estático).
-* **Responsabilidade:** Interface do usuário final. Exibe o mapa do Pelourinho, lista de sensores ativos, mapas de calor dinâmicos e o **Painel de Geolocalização Pendente**, permitindo que o usuário atribua coordenadas a novos sensores diretamente clicando no mapa.
-
-### 3. Integração QGIS & Watcher (`/qgis_integration`)
-* **Tecnologias:** QGIS Server Headless, Python Watcher Daemon, PyQGIS.
-* **Responsabilidade:** O daemon `watcher_headless.py` monitora a pasta do DataLake em tempo real. Qualquer alteração no banco GeoPackage regera o projeto `.qgz` de engenharia e instrui o QGIS Server a servir as novas camadas WFS/WMS atualizadas de forma transparente.
-
-### 4. Infraestrutura e DataLake (`/infra`)
-* **Tecnologias:** Docker Compose, Nginx Reverse Proxy, Linux SWAP.
-* **Responsabilidade:** Gerenciamento de volumes compartilhados, orquestração dos contêineres e roteamento interno de portas HTTP.
-
 ---
 
-## 📚 Documentação Técnica do Projeto
+## 📚 Central de Documentação Técnica (`/docs`)
 
-Para conferir os detalhes técnicos de implementação, correções de engenharia e guias de implantação, consulte os documentos abaixo:
+Para consultar os manuais conceituais, registros de infraestrutura e relatórios de refatoração, navegue pela pasta [docs](docs):
 
-* 📖 **[DEPLOY.md](DEPLOY.md):** Guia passo a passo do deploy na Oracle Cloud, configuração de rede (VCN/Security Lists), liberação de portas e otimização de memória SWAP.
-* 🛠️ **[LOG_DESENVOLVIMENTO.md](LOG_DESENVOLVIMENTO.md):** Diário de bordo técnico com todos os problemas de engenharia encontrados durante o desenvolvimento (desserialização Pickle, Nginx port-stripping, fallback WFS) e como foram resolvidos.
-* ⚙️ **[Relatório do Backend](backend/relatorio_refatoracao_backend.md):** Especificação detalhada da refatoração do backend e estrutura de rotas.
-* 🎨 **[Relatório do Frontend](frontend/relatorio_refatoracao_frontend.md):** Guia da arquitetura modular da interface e componentes visuais.
+* 📖 **[Guia de Implantação OCI (DEPLOY.md)](docs/DEPLOY.md):** Passo a passo do deploy na Oracle Cloud, configuração de rede (VCN/Security Lists) e memória SWAP.
+* 🛠️ **[Diário de Desenvolvimento (LOG_DESENVOLVIMENTO.md)](docs/LOG_DESENVOLVIMENTO.md):** Registro técnico de todos os problemas de engenharia resolvidos durante o projeto.
+* 🏛️ **[Modelagem de Arquitetura C4 (proposed_architecture.md)](docs/proposed_architecture.md):** Visão de contexto, contêineres e padrão Adapter.
+* 🌐 **[Visão Geral do Sistema (project_overview.md)](docs/project_overview.md):** Comparativo QGIS Desktop vs Server e topologia em estrela.
+* ⚙️ **[Relatório do Backend](backend/relatorio_refatoracao_backend.md):** Especificação da refatoração e estrutura de rotas.
+* 🎨 **[Relatório do Frontend](frontend/relatorio_refatoracao_frontend.md):** Guia da arquitetura modular do frontend.
 
 ---
 
