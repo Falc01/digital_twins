@@ -26,6 +26,8 @@ venv.bak/
 # Dados e Banco de Dados Local
 infra/dados/*.dyndb
 infra/dados/*.gpkg
+infra/dados/*.gpkg-shm
+infra/dados/*.gpkg-wal
 infra/dados/*.csv
 infra/dados/*.geojson
 infra/dados/status.json
