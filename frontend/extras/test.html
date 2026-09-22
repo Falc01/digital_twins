@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Teste de Módulos</title>
+</head>
+<body>
+  <h1>Teste de Módulos ES6</h1>
+  <pre id="log"></pre>
+
+n  <script>
+    const log = document.getElementById('log');
+    function write(msg) {
+      log.textContent += msg + '\n';
+      console.log(msg);
+    }
+
+n    write('1. Scripts carregados');
+    write('2. Tentando carregar módulos...');
+
+n    import('../js/api.js')
+      .then(m => {
+        write('✓ api.js carregado');
+        write('  - fetchStatus: ' + (typeof m.fetchStatus));
+        write('  - fetchSensors: ' + (typeof m.fetchSensors));
+      })
+      .catch(e => write('✗ ERRO em api.js: ' + e.message));
+
+n    import('../js/app.js')
+      .then(m => write('✓ app.js carregado'))
+      .catch(e => write('✗ ERRO em app.js: ' + e.message));
+  </script>
+</body>
+</html>

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gêmeo Digital — Painel de Ingestão</title>
+  
+  <!-- Tipografia (Google Fonts) -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --bg0: #030d1c;
+      --bg1: #071526;
+      --bg2: #0c1f38;
+      --bg3: #112847;
+      --bdr: #162f52;
+      --bdr2: #1e3e6e;
+      --cy: #00d4ff;
+      --gn: #22c55e;
+      --rd: #ef4444;
+      --am: #f59e0b;
+      --t0: #ddeaf8;
+      --t1: #7da8ce;
+      --t2: #3a6080;
+      --fd: 'Space Mono', monospace;
+      --fb: 'Inter', sans-serif;
+      --fm: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg0);
+      color: var(--t0);
+      font-family: var(--fb);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(0, 212, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(34, 197, 94, 0.04) 0%, transparent 40%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+      background: rgba(7, 21, 38, 0.8);
+      border: 1px solid var(--bdr);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 20px rgba(0, 212, 255, 0.05);
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cy), var(--gn));
+    }
+
+    .header {
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      stroke: var(--cy);
+      fill: none;
+    }
+
+    .title {
+      font-family: var(--fd);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--t0);
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: var(--t1);
+      letter-spacing: 0.05em;
+    }
+
+    .description {
+      font-size: 13px;
+      color: var(--t1);
+      line-height: 1.6;
+      margin-bottom: 25px;
+      background: var(--bg2);
+      border: 1px solid var(--bdr);
+      padding: 15px;
+      border-radius: 6px;
+      text-align: left;
+    }
+
+    .description ul {
+      margin-top: 8px;
+      margin-left: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      text-align: left;
+    }
+
+    label {
+      display: block;
+      font-family: var(--fm);
+      font-size: 11px;
+      color: var(--t1);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .input-text {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--bdr);
+      border-radius: 6px;
+      padding: 12px;
+      color: var(--t0);
+      font-family: var(--fm);
+      font-size: 13px;
+      outline: none;
+      transition: border-color var(--tr), box-shadow var(--tr);
+    }
+
+    .input-text:focus {
+      border-color: var(--cy);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
+    }
+
+    .dropzone-container {
+      margin-bottom: 30px;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--bdr);
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      background: rgba(12, 31, 56, 0.4);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--cy);
+      background: rgba(0, 212, 255, 0.04);
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
+    }
+
+    .dropzone-icon {
+      font-size: 36px;
+      margin-bottom: 15px;
+      display: inline-block;
+      transition: transform 0.2s ease;
+    }
+
+    .dropzone:hover .dropzone-icon {
+      transform: translateY(-4px);
+    }
+
+    .dropzone-text {
+      font-size: 13px;
+      color: var(--t0);
+      margin-bottom: 5px;
+    }
+
+    .dropzone-subtext {
+      font-size: 11px;
+      color: var(--t2);
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .selected-file-badge {
+      display: none;
+      background: var(--bg2);
+      border: 1px solid var(--cy);
+      padding: 10px 15px;
+      border-radius: 6px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 15px;
+      font-family: var(--fm);
+      font-size: 12px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cy);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .remove-file {
+      background: none;
+      border: none;
+      color: var(--rd);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 5px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, var(--cy), #00a3cc);
+      border: none;
+      color: var(--bg0);
+      padding: 14px 20px;
+      font-family: var(--fd);
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+      filter: brightness(1.1);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .btn-submit:disabled {
+      background: var(--bg3);
+      color: var(--t2);
+      border: 1px solid var(--bdr);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* Loader Animação */
+    .loader {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--bg0);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Tela de Feedback */
+    .feedback-panel {
+      display: none;
+      text-align: center;
+      animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .success-icon {
+      font-size: 54px;
+      color: var(--gn);
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+      animation: pulse 1.5s infinite;
+    }
+
+    .error-icon {
+      font-size: 54px;
+      color: var(--rd);
+      margin-bottom: 20px;
+      text-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .feedback-title {
+      font-family: var(--fd);
+      font-size: 18px;
+      margin-bottom: 15px;
+      letter-spacing: 0.05em;
+    }
+
+    .feedback-details {
+      background: var(--bg2);
+      border: 1px solid var(--bdr);
+      padding: 15px;
+      border-radius: 6px;
+      font-family: var(--fm);
+      font-size: 12px;
+      color: var(--t1);
+      margin-bottom: 30px;
+      text-align: left;
+      line-height: 1.6;
+    }
+
+    .feedback-details table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    .feedback-details td {
+      padding: 4px 0;
+    }
+
+    .feedback-details td:first-child {
+      color: var(--t2);
+      width: 130px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn-secondary {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--bdr);
+      color: var(--t0);
+      padding: 12px 20px;
+      font-family: var(--fd);
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg2);
+      border-color: var(--cy);
+      color: var(--cy);
+    }
+
+    .btn-primary-link {
+      flex: 1;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--gn), #15803d);
+      color: var(--bg0);
+      font-family: var(--fd);
+      font-weight: bold;
+      font-size: 13px;
+      border-radius: 6px;
+      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.2);
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary-link:hover {
+      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+      filter: brightness(1.1);
+    }
+
+    /* Rodapé */
+    .footer-bar {
+      margin-top: 30px;
+      font-family: var(--fm);
+      font-size: 10px;
+      color: var(--t2);
+      letter-spacing: 0.05em;
+    }
+
+    /* Animações */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleUp {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="main-panel">
+    
+    <div class="header">
+      <div class="brand">
+        <svg class="brand-logo" viewBox="0 0 24 24">
+          <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
+          <line x1="12" y1="2"    x2="12" y2="22"/>
+          <line x1="2"  y1="8.5"  x2="22" y2="8.5"/>
+          <line x1="2"  y1="15.5" x2="22" y2="15.5"/>
+        </svg>
+        <span class="title">GÊMEO DIGITAL</span>
+      </div>
+      <div class="subtitle">PAINEL DE INGESTÃO DE PLANILHAS DE ESTAÇÕES</div>
+    </div>
+
+    <div class="description">
+      Use este painel para carregar novos dados climáticos e espaciais no sistema:
+      <ul>
+        <li>O arquivo precisa estar no formato <strong>Excel (.xlsx, .xls)</strong> ou <strong>CSV (.csv)</strong>.</li>
+        <li>O nome da tabela é autocompletado com o nome do arquivo, mas você pode mudar.</li>
+        <li>Use o nome de destino <strong>sensor_readings_demo</strong> se quiser alimentar ou atualizar os sensores do Pelourinho no mapa.</li>
+      </ul>
+    </div>
+
+    <form id="upload-form">
+      <div class="form-group">
+        <label for="table-name-input">Nome da Tabela de Destino</label>
+        <input type="text" id="table-name-input" class="input-text" value="sensor_readings_demo" required placeholder="Ex: sensor_readings_demo"/>
+      </div>
+
+      <div class="dropzone-container">
+        <label>Planilha de Dados ou CSV</label>
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon">📊</div>
+          <div class="dropzone-text" id="dropzone-text">Arraste a planilha/CSV aqui ou clique para selecionar</div>
+          <div class="dropzone-subtext">Arquivos Excel (.xlsx, .xls) ou CSV (.csv) são aceitos</div>
+          <input type="file" id="file-input" class="file-input" accept=".xlsx,.xls,.csv"/>
+        </div>
+
+        <div class="selected-file-badge" id="file-badge">
+          <div class="file-info">
+            <span>📄</span>
+            <span id="file-name">planilha_dados.xlsx</span>
+          </div>
+          <button type="button" class="remove-file" id="remove-file-btn">×</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submit-btn" disabled>
+        <div class="loader" id="submit-loader"></div>
+        <span id="submit-text">INGERIR DADOS NO SISTEMA</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- Painel de Sucesso -->
+  <div class="container feedback-panel" id="success-panel">
+    <div class="success-icon">✓</div>
+    <div class="feedback-title" style="color:var(--gn)">INGESTÃO CONCLUÍDA!</div>
+    <p style="font-size:13px; color:var(--t1); margin-bottom: 20px;">
+      Os dados climáticos foram processados e importados com sucesso para o banco dinâmico do sistema.
+    </p>
+    
+    <div class="feedback-details">
+      <strong>Detalhes da Operação:</strong>
+      <table>
+        <tr>
+          <td>Tabela Destino</td>
+          <td id="res-table" style="color:var(--cy)">-</td>
+        </tr>
+        <tr>
+          <td>Registros Inseridos</td>
+          <td id="res-rows" style="color:var(--gn); font-weight:bold;">0</td>
+        </tr>
+        <tr>
+          <td>Exportação WFS/GPKG</td>
+          <td style="color:var(--gn)">CONCLUÍDA (WAL)</td>
+        </tr>
+        <tr>
+          <td>Sincronização QGIS</td>
+          <td style="color:var(--gn)">IMEDIATA</td>
+        </tr>
+        <tr>
+          <td>Timestamp</td>
+          <td id="res-time">-</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn-secondary" onclick="resetForm()">INGERIR OUTRO ARQUIVO</button>
+      <a href="/" class="btn-primary-link">ABRIR O MAPA DO GÊMEO</a>
+    </div>
+  </div>
+
+  <!-- Painel de Erro -->
+  <div class="container feedback-panel" id="error-panel">
+    <div class="error-icon">⚠</div>
+    <div class="feedback-title" style="color:var(--rd)">FALHA NA INGESTÃO</div>
+    <p id="error-message" style="font-size:13px; color:var(--t1); margin-bottom: 30px; line-height:1.6;">
+      Ocorreu um erro ao processar o seu arquivo de dados. Certifique-se de que a planilha não está corrompida e segue o padrão esperado.
+    </p>
+
+    <div class="btn-group">
+      <button class="btn-secondary" style="width:100%" onclick="resetForm()">TENTAR NOVAMENTE</button>
+    </div>
+  </div>
+
+  <div class="footer-bar">
+    GÊMEO DIGITAL IOT · UNIFACS · MVP v0.2
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const fileBadge = document.getElementById('file-badge');
+    const fileName = document.getElementById('file-name');
+    const removeFileBtn = document.getElementById('remove-file-btn');
+    const dropzoneText = document.getElementById('dropzone-text');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitLoader = document.getElementById('submit-loader');
+    const submitText = document.getElementById('submit-text');
+    const uploadForm = document.getElementById('upload-form');
+    const tableNameInput = document.getElementById('table-name-input');
+
+    const mainPanel = document.getElementById('main-panel');
+    const successPanel = document.getElementById('success-panel');
+    const errorPanel = document.getElementById('error-panel');
+
+    let selectedFile = null;
+
+    // Abrir seleção de arquivos ao clicar na dropzone
+    dropzone.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // Manipular arrastar e soltar
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length > 0) {
+        handleFileSelect(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelect(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      const allowed = ['xlsx', 'xls', 'csv'];
+      if (!allowed.includes(ext)) {
+        alert('Apenas arquivos no formato Excel (.xlsx, .xls) ou CSV (.csv) são permitidos.');
+        return;
+      }
+
+      selectedFile = file;
+      fileName.textContent = file.name;
+      dropzone.style.display = 'none';
+      fileBadge.style.display = 'flex';
+      submitBtn.disabled = false;
+
+      // Autocompletar o nome da tabela com o nome do arquivo (sem extensão)
+      const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+      // Normaliza para letras minúsculas e substitui caracteres inválidos por underline
+      const safeTableName = baseName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+      tableNameInput.value = safeTableName;
+    }
+
+    // Remover arquivo selecionado
+    removeFileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearSelectedFile();
+    });
+
+    function clearSelectedFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      fileBadge.style.display = 'none';
+      dropzone.style.display = 'block';
+      submitBtn.disabled = true;
+    }
+
+    // Resetar formulário
+    window.resetForm = function() {
+      clearSelectedFile();
+      successPanel.style.display = 'none';
+      errorPanel.style.display = 'none';
+      mainPanel.style.display = 'block';
+      submitBtn.disabled = true;
+      submitLoader.style.display = 'none';
+      submitText.textContent = 'INGERIR DADOS NO SISTEMA';
+    };
+
+    // Submissão do Formulário (Upload assíncrono para a API)
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedFile) return;
+
+      submitBtn.disabled = true;
+      submitLoader.style.display = 'block';
+      submitText.textContent = 'PROCESSANDO PLANILHA...';
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('table_name', tableNameInput.value.trim());
+
+      try {
+        // Faz a requisição de upload diretamente para a rota do proxy do Nginx (/api/ingest)
+        const response = await fetch('/api/ingest', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData?.detail || `Erro HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Exibir feedback de sucesso
+        document.getElementById('res-table').textContent = data.table;
+        document.getElementById('res-rows').textContent = data.rows_ingested;
+        document.getElementById('res-time').textContent = data.timestamp;
+
+        mainPanel.style.display = 'none';
+        successPanel.style.display = 'block';
+
+      } catch (err) {
+        console.error('Falha de ingestão:', err);
+        document.getElementById('error-message').textContent = `Falha na requisição de upload: ${err.message}`;
+        mainPanel.style.display = 'none';
+        errorPanel.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

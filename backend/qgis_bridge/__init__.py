@@ -1,0 +1,1 @@
+"""Ponte de exportação geoespacial para QGIS Server."""

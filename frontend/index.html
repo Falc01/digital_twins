@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gêmeo Digital — UNIFACS IoT</title>
+
+  <!-- Leaflet CSS (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+
+  <!-- Tipografia (Google Fonts) -->
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <!-- Design system e estilos da aplicação -->
+  <link rel="stylesheet" href="styles/main.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     LOADING SCREEN
+     ══════════════════════════════════════════════════════════════ -->
+<div id="ld">
+  <div>
+    <div class="ld-logo">GÊMEO DIGITAL</div>
+    <div class="ld-sub">UNIFACS — Sistema de Monitoramento IoT</div>
+    <div class="ld-track"><div class="ld-bar" id="lbar"></div></div>
+    <div class="ld-msg" id="lmsg">Inicializando sistema...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     APP GRID (topbar · sidebar · mapa · statusbar)
+     ══════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── TOPBAR ─────────────────────────────────────────────────── -->
+  <header id="tb">
+    <div class="brand">
+      <div class="brand-ico">
+        <svg viewBox="0 0 24 24">
+          <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
+          <line x1="12" y1="2"    x2="12" y2="22"/>
+          <line x1="2"  y1="8.5"  x2="22" y2="8.5"/>
+          <line x1="2"  y1="15.5" x2="22" y2="15.5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-nm">GÊMEO DIGITAL</div>
+        <div class="brand-sm">UNIFACS · Salvador, BA</div>
+      </div>
+    </div>
+
+    <div class="vdiv"></div>
+
+    <div class="tb-stats">
+      <div class="tb-s">
+        <span class="dot pulse-dot" style="background:var(--gn);box-shadow:0 0 5px var(--gn)"></span>
+        <span>Sensores ativos</span>
+        <span class="val" id="ts-on">–/–</span>
+      </div>
+      <div class="tb-s">
+        <span style="font-size:11px;color:var(--am)">⚠</span>
+        <span>Alertas</span>
+        <span class="val" id="ts-al">–</span>
+      </div>
+      <div class="tb-s">
+        <span class="dot pulse-dot" style="background:var(--cy);box-shadow:0 0 5px var(--cy)"></span>
+        <span style="font-family:var(--fm);font-size:9px">QGIS WMS</span>
+        <span class="badge b-gn">ONLINE</span>
+      </div>
+    </div>
+
+    <div class="tb-right">
+      <a href="/upload.html" class="badge b-gn" style="text-decoration: none; margin-right: 8px; cursor: pointer; border: 1px solid var(--gn);">↑ INGERIR DADOS</a>
+      <span class="badge b-cy">MVP v0.2</span>
+      <span id="clock"></span>
+    </div>
+  </header>
+
+  <!-- ── SIDEBAR ────────────────────────────────────────────────── -->
+  <aside id="sd">
+
+    <!-- Camadas -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('ly')">
+        <span class="sec-t">Camadas (WMS/WFS)</span>
+        <span class="sec-ch o" id="ch-ly">▾</span>
+      </div>
+      <div class="sec-b" id="sb-ly">
+        <div class="ly-item" onclick="window.__ui.togLayer('base')">
+          <div class="ly-ck on" id="lc-base"></div>
+          <span class="ly-lbl">Mapa Base <em>CartoDB / QGIS</em></span>
+        </div>
+        <div class="ly-item" onclick="window.__ui.togLayer('sns')">
+          <div class="ly-ck on" id="lc-sns"></div>
+          <span class="ly-lbl">Sensores IoT <em>WFS</em></span>
+        </div>
+        <div class="ly-item" onclick="window.__ui.togLayer('heat')">
+          <div class="ly-ck" id="lc-heat"></div>
+          <span class="ly-lbl">Mapa de Calor <em>Nativo (Tº)</em></span>
+        </div>
+        <!-- Grade Campus: botão existia mas não funcionava por ausência de if no togLayer original.
+             Corrigido pelo dicionário dinâmico activeLayers em map.js -->
+        <div class="ly-item" onclick="window.__ui.togLayer('grid')">
+          <div class="ly-ck" id="lc-grid"></div>
+          <span class="ly-lbl">Grade Campus <em>GPKG</em></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gerenciar DataLake -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('dl')">
+        <span class="sec-t">📊 Gerenciar DataLake</span>
+        <span class="sec-ch o" id="ch-dl">▾</span>
+      </div>
+      <div class="sec-b" id="sb-dl">
+        <div id="datalake-tables-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+
+    <!-- Variável de Sensor -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('vr')">
+        <span class="sec-t">Variável de Sensor</span>
+        <span class="sec-ch o" id="ch-vr">▾</span>
+      </div>
+      <div class="sec-b" id="sb-vr">
+        <div style="font-size:10px;color:var(--t2);margin-bottom:8px">
+          Autodescoberto via WFS · <span id="ac">0</span> atributos
+        </div>
+        <div class="ag" id="ag"></div>
+      </div>
+    </div>
+
+    <!-- Legenda -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('lg')">
+        <span class="sec-t">Legenda</span>
+        <span class="sec-ch o" id="ch-lg">▾</span>
+      </div>
+      <div class="sec-b" id="sb-lg">
+        <div id="leg-attr"></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)">
+          <div style="font-size:9px;color:var(--t2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Status dos Sensores</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sdo"></span><span style="color:var(--t1)">Online</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sdw"></span><span style="color:var(--t1)">Alerta</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px"><span class="sd-dot sda"></span><span style="color:var(--t1)">Crítico</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Geolocalização Pendente -->
+    <div class="sec">
+      <div class="sec-h" onclick="window.__ui.togSec('gp')">
+        <span class="sec-t">📍 Geolocalização Pendente</span>
+        <span class="sec-ch o" id="ch-gp">▾</span>
+      </div>
+      <div class="sec-b" id="sb-gp">
+        <div id="pending-sensors-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+
+    <!-- Lista de Sensores -->
+    <div class="sec" style="border-bottom:none;flex:1">
+      <div class="sec-h" onclick="window.__ui.togSec('sl')">
+        <span class="sec-t">Sensores — <span id="sc" style="color:var(--cy)">0</span></span>
+        <span class="sec-ch o" id="ch-sl">▾</span>
+      </div>
+      <div class="sec-b" id="sb-sl" style="padding-top:2px"></div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAPA ───────────────────────────────────────────────────── -->
+  <main id="mp">
+    <div class="mo" id="wms-badge">
+      <span class="wms-blink"></span>
+      <span id="wms-lbl" style="font-family:var(--fm);font-size:10px">WMS → QGIS Server :8080</span>
+    </div>
+  </main>
+
+  <!-- ── STATUS BAR ─────────────────────────────────────────────── -->
+  <footer id="st">
+    <div class="st-item">
+      <span class="dot" style="background:var(--gn)"></span>
+      <span>FastAPI Backend</span>
+      <span class="st-val" style="color:var(--gn)">OK · :8000</span>
+    </div>
+    <div class="vdiv"></div>
+    <div class="st-item">
+      <span class="dot" style="background:var(--cy)"></span>
+      <span>QGIS Server</span>
+      <span class="st-val" style="color:var(--cy)">WMS ATIVO</span>
+    </div>
+    <div class="vdiv"></div>
+    <div class="st-item">
+      <span>GeoPackage</span>
+      <span class="st-val" style="color:var(--gn)">WAL · OK</span>
+    </div>
+    <div class="vdiv"></div>
+    <div class="st-item">
+      <span>Última sincronização:</span>
+      <span class="st-val" id="sync-ts" style="color:var(--t0);margin-left:2px">–</span>
+    </div>
+    <div class="st-item">
+      <span style="font-family:var(--fm);font-size:9px;color:var(--t2)">
+        /api/v1/status · <span id="sync-s" style="color:var(--gn)">–</span>
+      </span>
+    </div>
+    <div id="mock-note">MOCK SIMULATOR — ARQUITETURA IoT V0.2</div>
+  </footer>
+
+</div><!-- /#app -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     DEPENDÊNCIAS EXTERNAS (CDN)
+     ══════════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PONTO DE ENTRADA DA APLICAÇÃO
+     type="module" habilita import/export ES6 entre os arquivos js/
+     ══════════════════════════════════════════════════════════════ -->
+<script>
+  // Configurações globais antes de carregar os módulos
+  window.QGIS_BASE = window.location.origin;
+</script>
+<script type="module" src="js/app.js"></script>
+
+</body>
+</html>
