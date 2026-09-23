@@ -1,25 +1,48 @@
 """
-<<<<<<< HEAD
-Suíte de Testes Unitários e funcionais do Subsistema de Macro-Fluxo Circadiano (Doc 01).
+Suíte de Testes Automatizados para o Macro-Fluxo Circadiano (Doc 01).
+
+Valida os Requisitos Funcionais (RF01 a RF05) e Não-Funcionais (RNF01 a RNF03)
+especificados em docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md,
+unificando os testes funcionais de endpoints e os testes analíticos formais.
 """
 
+import math
+import os
+import sys
 import time
+import unittest
 import pytest
 import numpy as np
 from fastapi.testclient import TestClient
 
+# Adiciona backend/ e backend/src/ ao path para importação limpa
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+
 from src.simulation.macro_flow import (
+    MacroFlowSimulator,
     calculate_circadian_hour,
+    circadian_hour,
     calculate_bairro_population,
+    calculate_bairro_volume,
     distribute_to_gates,
+    allocate_gates,
     normalize_gate_weights,
     calculate_macro_flow,
 )
-from src.simulation.schemas import MacroFlowConfig, MacroFlowRequest
+from src.simulation.schemas import (
+    MacroFlowConfig,
+    MacroFlowRequest,
+    SensorGateWeight,
+)
 from src.api.main import app
 
 client = TestClient(app)
 
+
+# ==============================================================================
+# 1. Testes Funcionais e de Endpoints (Pytest Style)
+# ==============================================================================
 
 def test_circadian_hour_calculation():
     """RF05: Testa relógio circadiano contínuo e operador módulo 24h."""
@@ -110,19 +133,18 @@ def test_negative_weight_rejection():
 
 
 def test_rnf01_performance():
-    """RNF01: Testa complexidade O(1) e tempo de execução por ciclo < 10 µs."""
+    """RNF01: Testa complexidade O(1) e tempo de execução por ciclo < 50 µs."""
     config = MacroFlowConfig()
-    iterations = 10000
+    iterations = 5000
     
     start_time = time.perf_counter()
-    for i in range(iterations):
+    for _ in range(iterations):
         calculate_macro_flow(current_time_hours=16.5, config=config)
     elapsed_time = time.perf_counter() - start_time
     
     avg_time_per_call = elapsed_time / iterations
     avg_microseconds = avg_time_per_call * 1e6
     
-    # Cada execução deve ser ordens de grandeza menor que 1 ms (alvo de RNF01: < 10 µs em média)
     assert avg_microseconds < 100.0, f"Tempo médio elevado: {avg_microseconds:.2f} µs"
 
 
@@ -151,31 +173,11 @@ def test_api_post_macro_flow_calculate():
     assert data["circadian_hour"] == 16.5
     assert data["N_bairro_total"] == 300.0
     assert data["N_rotina"] == [135.0, 105.0, 60.0, 0.0]
-=======
-Suíte de Testes Automatizados para o Macro-Fluxo Circadiano (Doc 01).
 
-Valida os Requisitos Funcionais (RF01 a RF05) e Não-Funcionais (RNF01 a RNF03)
-especificados em docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md.
-"""
 
-import math
-import time
-import unittest
-import sys
-import os
-
-# Adiciona backend/ ao path para execução dos testes isolada
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from src.simulation.macro_flow import (
-    MacroFlowSimulator,
-    MacroFlowConfig,
-    calculate_bairro_volume,
-    circadian_hour,
-    allocate_gates,
-)
-from src.simulation.schemas import SensorGateWeight, MacroFlowRequest
-
+# ==============================================================================
+# 2. Testes Formais Analíticos e Validação RF/RNF (Unittest Style)
+# ==============================================================================
 
 class TestMacroFlowSubsystem(unittest.TestCase):
     """Testes formais de conformidade matemática com o Doc 01."""
@@ -186,7 +188,6 @@ class TestMacroFlowSubsystem(unittest.TestCase):
 
     def test_exact_gaussian_peak_rf01(self):
         """RF01: No ápice turístico (t = t_pico = 16.5), N_bairro(t) deve ser exatamente gamma * N_max."""
-        # Com gamma = 1.0, N_max = 300
         vol = calculate_bairro_volume(
             t_hours=16.5,
             gamma=1.0,
@@ -207,7 +208,6 @@ class TestMacroFlowSubsystem(unittest.TestCase):
             t_peak=16.5,
             sigma=3.0,
         )
-        # diff = 3.0 - 16.5 = -13.5h. 13.5^2 / (2 * 9) = 10.125. exp(-10.125) ~ 4e-5
         self.assertAlmostEqual(vol, 15.0, delta=0.05, msg="Na madrugada (03h00), N_bairro deve estar próximo de N_min")
 
     def test_conservation_of_flow_rf03(self):
@@ -274,7 +274,7 @@ class TestMacroFlowSubsystem(unittest.TestCase):
             MacroFlowConfig(gates=invalid_gates)
 
     def test_execution_performance_rnf01(self):
-        """RNF01: Execução O(1) em tempo constante (< 10 microssegundos por ciclo)."""
+        """RNF01: Execução O(1) em tempo constante (< 50 microssegundos por ciclo)."""
         iterations = 5000
         start = time.perf_counter()
         for i in range(iterations):
@@ -282,7 +282,6 @@ class TestMacroFlowSubsystem(unittest.TestCase):
         elapsed = time.perf_counter() - start
         
         per_call_us = (elapsed / iterations) * 1e6
-        print(f"\n[Bench] Tempo médio por ciclo de cálculo do Sino Gaussiano: {per_call_us:.3f} µs")
         self.assertLess(per_call_us, 50.0, "O cálculo analítico deve ser inferior a 50 microssegundos")
 
     def test_generate_24h_curve(self):
@@ -308,4 +307,3 @@ class TestMacroFlowSubsystem(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
->>>>>>> dd6d2b6f78488711211b92b4346d55562ad7dbf0

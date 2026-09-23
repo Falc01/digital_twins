@@ -10,6 +10,6 @@
 - [x] **[CONCLUÍDO]** Apresentação Técnica em Reveal.js (`apresentacao/apresentacao_dados_sinteticos.html`) apresentada e aprovada pelo orientador e doutorando
 - [x] **[CONCLUÍDO]** Criação da Suíte Modular de Documentação Técnica em 6 Arquivos em [`docs/explanation/dados_sinteticos/`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/) contendo o Doc 00 Central de Ingestão e Barramento de Dados + os 5 Documentos Especializados com RFs, RNFs, equações cruas e contratos de importação/exportação
 - [x] **[CONCLUÍDO]** Commit e push de toda a suíte de documentação modular para o GitHub (`origin/main`)
-- [x] **[CONCLUÍDO]** Implementação prática do Subsistema de Macro-Fluxo Circadiano (Doc 01) pelos colegas em `backend/src/simulation/` (`macro_flow.py`, `schemas.py`, `cli_macro_flow.py`), rotas FastAPI (`routers/simulation.py`) e testes (`backend/tests/test_macro_flow.py`)
-- [ ] **[EM REVISÃO]** Auditoria minuciosa da implementação dos colegas e emissão de relatório técnico de consistência / conformidade
-- [ ] **[PRÓXIMO PASSO]** Implementação dos módulos da parte do João (Doc 02 - Injeção Dinâmica de Eventos, Doc 03 - Cadeia de Markov e POIs, Doc 04 - Saturação de Richards e Ruído IoT, Doc 00 - Pipeline Integrado e GeoPackage)
+- [x] **[CONCLUÍDO]** Unificação e homologação completa do Subsistema de Macro-Fluxo Circadiano (Doc 01) em `backend/src/simulation/` (`macro_flow.py`, `schemas.py`, `cli_macro_flow.py`), rotas FastAPI (`routers/simulation.py`) e 20 testes unitários verdes em `backend/tests/test_macro_flow.py`
+- [ ] **[AGUARDANDO EQUIPE]** Colegas (Perrone / Daniel) puxarem a `main` e implementarem o Doc 02 (Injeção Dinâmica de Eventos e Atrações Culturais)
+- [ ] **[PRÓXIMO PASSO DO JOÃO]** Implementação do Doc 03 (Circulação Markoviana, POIs e Matriz de Transição) e integração com Doc 04/00

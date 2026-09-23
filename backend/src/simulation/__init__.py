@@ -1,60 +1,50 @@
 """
-<<<<<<< HEAD
-Módulo de Simulação de Dados Sintéticos de Pedestres do Pelourinho.
-
-Herda a arquitetura definida nos Docs 00 a 05 da suíte de dados sintéticos.
-"""
-
-from src.simulation.schemas import MacroFlowConfig, MacroFlowRequest, MacroFlowResponse
-from src.simulation.macro_flow import (
-    calculate_circadian_hour,
-    calculate_bairro_population,
-    distribute_to_gates,
-    calculate_macro_flow,
-)
-
-__all__ = [
-    "MacroFlowConfig",
-    "MacroFlowRequest",
-    "MacroFlowResponse",
-    "calculate_circadian_hour",
-    "calculate_bairro_population",
-    "distribute_to_gates",
-    "calculate_macro_flow",
-=======
 Pacote de Simulação Estocástica de Dados Sintéticos do Gêmeo Digital IoT - UNIFACS.
 
 Implementa a suíte matemática de modelagem de pedestres para o Centro Histórico do Pelourinho,
 conforme especificado em docs/explanation/dados_sinteticos/.
 """
 
-from src.simulation.macro_flow import (
-    MacroFlowSimulator,
-    MacroFlowConfig,
-    MacroFlowResult,
-    calculate_bairro_volume,
-    circadian_hour,
-    allocate_gates,
-)
 from src.simulation.schemas import (
     SensorGateWeight,
+    SensorAllocation,
+    MacroFlowConfig,
     MacroFlowRequest,
     MacroFlowResponse,
     MacroFlowCurvePoint,
     MacroFlowCurveResponse,
 )
+from src.simulation.macro_flow import (
+    MacroFlowSimulator,
+    MacroFlowResult,
+    calculate_circadian_hour,
+    circadian_hour,
+    current_system_hour,
+    calculate_bairro_population,
+    calculate_bairro_volume,
+    normalize_gate_weights,
+    distribute_to_gates,
+    allocate_gates,
+    calculate_macro_flow,
+)
 
 __all__ = [
-    "MacroFlowSimulator",
-    "MacroFlowConfig",
-    "MacroFlowResult",
-    "calculate_bairro_volume",
-    "circadian_hour",
-    "allocate_gates",
     "SensorGateWeight",
+    "SensorAllocation",
+    "MacroFlowConfig",
     "MacroFlowRequest",
     "MacroFlowResponse",
     "MacroFlowCurvePoint",
     "MacroFlowCurveResponse",
->>>>>>> dd6d2b6f78488711211b92b4346d55562ad7dbf0
+    "MacroFlowSimulator",
+    "MacroFlowResult",
+    "calculate_circadian_hour",
+    "circadian_hour",
+    "current_system_hour",
+    "calculate_bairro_population",
+    "calculate_bairro_volume",
+    "normalize_gate_weights",
+    "distribute_to_gates",
+    "allocate_gates",
+    "calculate_macro_flow",
 ]
