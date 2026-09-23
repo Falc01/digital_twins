@@ -24,7 +24,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.dependencies import get_table_manager
-from src.api.routers import ingest, tables, status, sensors
+from src.api.routers import ingest, tables, status, sensors, simulation
 from shared.config import DATA_DIR
 from qgis_bridge.exporter import export_all_tables, detect_coordinate_columns
 from dyntable.data._types import DynType
@@ -131,12 +131,15 @@ app.include_router(status.router, prefix="/api/v1")
 app.include_router(status.router, prefix="/api")
 app.include_router(sensors.router, prefix="/api/v1")
 app.include_router(sensors.router, prefix="/api")
+app.include_router(simulation.router, prefix="/api/v1")
+app.include_router(simulation.router, prefix="/api")
 
 # Rotas sem prefixo para compatibilidade com os Testes e legado
 app.include_router(ingest.router)
 app.include_router(tables.router)
 app.include_router(status.router)
 app.include_router(sensors.router)
+app.include_router(simulation.router)
 
 
 # Endpoints de listagem de tipos de dados (DynTypes)
