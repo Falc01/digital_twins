@@ -16,6 +16,7 @@ venv.bak/
 # Antigravity/Gemini (Arquivos de log e cache)
 .antigravity/
 .gemini/
+.agents/memory/
 
 # IDEs
 .vscode/
