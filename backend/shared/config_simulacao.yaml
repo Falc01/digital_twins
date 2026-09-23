@@ -1,0 +1,19 @@
+# backend/shared/config_simulacao.yaml
+# Parâmetros de calibração para a suíte de simulação de pedestres do Pelourinho
+
+simulation:
+  temporal:
+    peak_hour_default: 16.5       # t_pico = 16h30
+    spread_hours_default: 3.0     # σ = 3.0 horas
+    fundamental_period: 24.0      # T_ciclo = 24h
+    step_minutes: 5.0             # Intervalo Δt do tick de simulação
+
+  macro_flow:
+    default_N_max: 300            # Lotação máxima global basal do Pelourinho
+    default_N_min: 15             # Piso basal da madrugada (03h00)
+    default_gamma: 1.0            # Fator sazonal padrão (dias úteis normais)
+    default_gate_weights:         # Pesos de entrada padrão para 4 portões principais
+      - 0.45                      # Sensor Elevador Lacerda
+      - 0.35                      # Sensor Praça da Sé
+      - 0.20                      # Sensor Ladeira do Carmo
+      - 0.00                      # Sensor Largo interno (sem acesso externo)
