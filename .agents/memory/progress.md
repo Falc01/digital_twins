@@ -9,5 +9,10 @@
 - [x] **[CONCLUÍDO]** Consolidação unificada dos trabalhos em [`framework_unificado_dados_sinteticos.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/framework_unificado_dados_sinteticos.md)
 - [x] **[CONCLUÍDO]** Apresentação Técnica em Reveal.js (`apresentacao/apresentacao_dados_sinteticos.html`) apresentada e aprovada pelo orientador e doutorando
 - [x] **[CONCLUÍDO]** Criação da Suíte Modular de Documentação Técnica em 6 Arquivos em [`docs/explanation/dados_sinteticos/`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/) contendo o Doc 00 Central de Ingestão e Barramento de Dados + os 5 Documentos Especializados com RFs, RNFs, equações cruas e contratos de importação/exportação
+<<<<<<< HEAD
+- [x] **[CONCLUÍDO]** Implementação prática do Subsistema de Macro-Fluxo Circadiano (Doc 01) em `backend/src/simulation/` (`macro_flow.py`, `schemas.py`, `cli_macro_flow.py`), registro na API FastAPI (`routers/simulation.py`) e validação com 10 testes unitários em `backend/tests/test_macro_flow.py`
+- [ ] **[PRÓXIMO PASSO]** Implementação do Doc 02 (Injeção de Eventos e Atrações Culturais) ou integração com gravação em lote no GeoPackage/SQLite
+=======
 - [x] **[CONCLUÍDO]** Commit e push de toda a suíte de documentação modular para o GitHub (`origin/main`)
 - [ ] **[PRÓXIMO PASSO]** Implementação prática dos módulos no container de API FastAPI e integração com o GeoPackage
+>>>>>>> 2001a2e171dcf2d0d42352e666a0fe7071d47d3f

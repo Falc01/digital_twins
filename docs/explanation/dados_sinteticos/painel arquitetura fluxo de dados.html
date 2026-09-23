@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arquitetura do Gêmeo Digital IoT — UNIFACS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --foreground: #f8fafc;
+      --muted-foreground: #94a3b8;
+      --primary: #3b82f6;
+      --primary-foreground: #ffffff;
+      --secondary: #334155;
+      --secondary-foreground: #f8fafc;
+      --accent: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased p-4 sm:p-6 space-y-6">
+
+  <!-- Header Card -->
+  <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Arquitetura Ativa • UNIFACS Pelourinho
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-white">
+          🌐 Gêmeo Digital IoT — Centro Histórico
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">
+          Topologia Hub-and-Spoke • GIS Headless (QGIS Server) • Ingestão Assíncrona & Simulação Estocástica
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="text-right hidden sm:block">
+          <div class="text-xs text-slate-400">Supervisor Residente</div>
+          <div class="text-sm font-semibold text-white">digital_twins PM</div>
+        </div>
+        <div class="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-500/20">
+          GT
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex flex-wrap gap-2 mt-6 pt-4 border-t border-slate-800">
+      <button onclick="switchTab('tab-c4')" id="btn-c4" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg transition-all bg-blue-600 text-white shadow-sm">
+        🏛️ Visão C4 & Topologia
+      </button>
+      <button onclick="switchTab('tab-modulos')" id="btn-modulos" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg transition-all bg-slate-800 text-slate-200 hover:bg-slate-700">
+        📦 10 Sub-módulos
+      </button>
+      <button onclick="switchTab('tab-matematica')" id="btn-matematica" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg transition-all bg-slate-800 text-slate-200 hover:bg-slate-700">
+        🧮 Modelagem Sintética (Docs 00-05)
+      </button>
+      <button onclick="switchTab('tab-datalake')" id="btn-datalake" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg transition-all bg-slate-800 text-slate-200 hover:bg-slate-700">
+        💾 Datalake & Esquemas
+      </button>
+      <button onclick="switchTab('tab-requisicoes')" id="btn-requisicoes" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg transition-all bg-slate-800 text-slate-200 hover:bg-slate-700">
+        🎯 Central de Requisições
+      </button>
+    </div>
+  </div>
+
+  <!-- TAB 1: Visão C4 & Topologia -->
+  <div id="tab-c4" class="tab-content space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase">Gateway Público</span>
+          <span class="px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 font-semibold">Porta 8080</span>
+        </div>
+        <div class="text-lg font-bold mt-2 text-white">Nginx Reverse Proxy</div>
+        <p class="text-xs text-slate-400 mt-1">
+          Ponto único de entrada. Centraliza rotas para o frontend (<code>/</code>), API (<code>/api/*</code>) e QGIS Server (<code>/qgis/*</code>).
+        </p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase">Backend REST & Adapter</span>
+          <span class="px-2 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-400 font-semibold">Porta 8000</span>
+        </div>
+        <div class="text-lg font-bold mt-2 text-white">FastAPI (Python 3.12+)</div>
+        <p class="text-xs text-slate-400 mt-1">
+          Motor dinâmico de tabelas, micro-batching espacial para GeoPackage, heartbeat e ingestão heterogênea.
+        </p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase">Cartografia Headless</span>
+          <span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 font-semibold">QGIS Server + PyQGIS</span>
+        </div>
+        <div class="text-lg font-bold mt-2 text-white">QGIS Server & Watcher</div>
+        <p class="text-xs text-slate-400 mt-1">
+          Geração e entrega de WMS/WFS padrão OGC com reload a quente via daemon inotify no projeto <code>.qgz</code>.
+        </p>
+      </div>
+    </div>
+
+    <!-- Diagrama Visual -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-sm">
+      <h3 class="text-base font-semibold text-white mb-4 flex items-center gap-2">
+        <span>🏛️</span> Fluxo Topológico de Dados (Hub-and-Spoke)
+      </h3>
+      <div class="p-4 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono overflow-x-auto text-slate-300 leading-relaxed">
+        [Navegador / Operador Web]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;│&nbsp;HTTP :8080<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+        [🌐 Nginx Gateway Proxy]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;├──► /&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;──► [🎨 Frontend Web (Node.js / Leaflet.js)]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;├──► /api/*&nbsp;&nbsp;&nbsp;──► [⚡ Backend FastAPI (Python Adapter)]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└──► /qgis/*&nbsp;&nbsp;──► [🗺️ QGIS Server Headless (WMS / WFS)]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▲<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ (Lê projeto compilado)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[⚙️ QGIS Watcher Daemon]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│ (Regenera projeto a quente)<br>
+        ══════════════════════════╪══════════════════════════════════<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+        💾 DATALAKE CENTRAL COMPARTILHADO (/infra/dados)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;• SQLite Matriz (digital_twin.dyndb) [WAL Mode Ativo]<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;• OGC GeoPackage Espacial (projeto_iot.gpkg)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;• Projeto Cartográfico (projeto_iot.qgz)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;• Heartbeat & Metadados (status.json / sensors_metadata.json)
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: 10 Sub-módulos -->
+  <div id="tab-modulos" class="tab-content hidden space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-blue-400">M01 • dyntable_engine</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Motor de Tabelas Dinâmicas</h4>
+        <p class="text-xs text-slate-400 mt-1">Criação automatizada de tabelas SQLite para dados heterogêneos sem perda de colunas não catalogadas.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 backend/src/dyntable/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-purple-400">M02 • fastapi_api</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold">Em Expansão</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">API REST FastAPI & Adapter</h4>
+        <p class="text-xs text-slate-400 mt-1">Endpoints de upload, ingestão de sensores, consulta de status em tempo real e orquestração de microsserviços.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 backend/src/fastapi_api/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-emerald-400">M03 • gpkg_exporter</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Adaptador Espacial GeoPackage</h4>
+        <p class="text-xs text-slate-400 mt-1">Sincroniza registros tabulares no formato padrão OGC GeoPackage (POINT EPSG:4326) para leitura nativa pelo QGIS.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 backend/src/gpkg_exporter/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-amber-400">M04 • qgis_server</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Servidor GIS Headless</h4>
+        <p class="text-xs text-slate-400 mt-1">Serviço em contêiner que processa requisições OGC WMS/WFS e gera mapas e mapas de calor renderizados.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 infra/docker/ & docker-compose.yml</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-rose-400">M05 • qgis_watcher_daemon</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Watcher Daemon PyQGIS</h4>
+        <p class="text-xs text-slate-400 mt-1">Monitora eventos inotify no GeoPackage e regenera a quente as camadas do projeto <code>.qgz</code> sem parar o servidor.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 qgis_integration/qgis_bridge/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-cyan-400">M06 • frontend_mapa_leaflet</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Core Cartográfico Leaflet.js</h4>
+        <p class="text-xs text-slate-400 mt-1">Visualização com mapa base, camadas WMS, popups interativos de sensores e filtros de variáveis dinâmicas.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 frontend/src/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-indigo-400">M07 • frontend_georeferenciamento</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Painel de Geolocalização</h4>
+        <p class="text-xs text-slate-400 mt-1">Interface visual para cadastro e calibração de coordenadas geográficas de novos sensores físicos.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 frontend/src/geo/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-pink-400">M08 • frontend_ingestao_upload</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Portal de Ingestão & Upload</h4>
+        <p class="text-xs text-slate-400 mt-1">Upload drag-and-drop de arquivos CSV e planilhas Excel com validação e preview prévio antes de gravar.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 frontend/src/upload/</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-slate-300">M09 • gateway_nginx</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Gateway Proxy Reverso Nginx</h4>
+        <p class="text-xs text-slate-400 mt-1">Configuração de roteamento unificado na porta 8080, mitigação CORS, compressão gzip e headers de cache.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 infra/docker/nginx.conf</div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono font-bold text-orange-400">M10 • orquestracao_oci</span>
+          <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold">Pronto</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Orquestração em Nuvem (OCI)</h4>
+        <p class="text-xs text-slate-400 mt-1">Configuração de deploy na Oracle Cloud com regras de firewall VCN, 4GB SWAP e reinício automático.</p>
+        <div class="text-[11px] font-mono text-slate-500 mt-3">📁 docs/how-to/deploy_oci.md</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB 3: Modelagem Matemática -->
+  <div id="tab-matematica" class="tab-content hidden space-y-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-semibold text-white">Suíte de Simulação Estocástica de Pedestres</h3>
+        <span class="text-xs px-2.5 py-1 rounded bg-blue-500/10 text-blue-400 font-mono">docs/explanation/dados_sinteticos/</span>
+      </div>
+
+      <div class="space-y-4">
+        <div class="p-4 rounded-lg bg-slate-950 border border-slate-800">
+          <div class="font-bold text-sm text-white">1. Macro-Fluxo Diário nos Portões (Doc 01)</div>
+          <p class="text-xs text-slate-400 mt-1">
+            Modela o pulso rotineiro de pedestres que acessam o Pelourinho através dos portões principais usando o Sino Gaussiano calibrado:
+          </p>
+          <div class="mt-2 p-2 rounded bg-slate-900 font-mono text-xs text-emerald-400">
+            N_rotina(t) = N_min + (N_max - N_min) * exp(- (t - t_pico)² / (2σ²)) * w_j
+          </div>
+        </div>
+
+        <div class="p-4 rounded-lg bg-slate-950 border border-slate-800">
+          <div class="font-bold text-sm text-white">2. Injeção de Eventos & Atrações Culturais (Doc 02)</div>
+          <p class="text-xs text-slate-400 mt-1">
+            Pulsos sigmoidais de início e dispersão de shows (ex: Terça da Benção, Olodum) com fator de atração por POI:
+          </p>
+          <div class="mt-2 p-2 rounded bg-slate-900 font-mono text-xs text-purple-400">
+            E_k(t) = A_k * S_subida(t) * S_dispersao(t) * α_j
+          </div>
+        </div>
+
+        <div class="p-4 rounded-lg bg-slate-950 border border-slate-800">
+          <div class="font-bold text-sm text-white">3. Circulação Espacial: Cadeia de Markov (Doc 03)</div>
+          <p class="text-xs text-slate-400 mt-1">
+            Matriz estocástica P_ij de transição entre os largos, becos e praças do Pelourinho:
+          </p>
+          <div class="mt-2 p-2 rounded bg-slate-900 font-mono text-xs text-amber-400">
+            N_propagado(t) = P^T * N_pedestres(t - Δt)
+          </div>
+        </div>
+
+        <div class="p-4 rounded-lg bg-slate-950 border border-slate-800">
+          <div class="font-bold text-sm text-white">4. Saturação de Richards & Ruído IoT (Doc 04)</div>
+          <p class="text-xs text-slate-400 mt-1">
+            Limite físico do espaço urbano e erro gaussiano/Poisson de câmeras de visão computacional:
+          </p>
+          <div class="mt-2 p-2 rounded bg-slate-900 font-mono text-xs text-cyan-400">
+            N_sensor(t) = round( clamp( Richards(N_bruto) + ε_ruido, 0, N_capacidade_max ) )
+          </div>
+        </div>
+
+        <div class="p-4 rounded-lg bg-slate-950 border border-slate-800">
+          <div class="font-bold text-sm text-white">5. Protocolo de Auditoria e Validação (Doc 05)</div>
+          <p class="text-xs text-slate-400 mt-1">
+            Testes de conformidade estatística bidimensional de Kolmogorov-Smirnov (KS 2D) e Divergência de Kullback-Leibler.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: Datalake & Esquemas -->
+  <div id="tab-datalake" class="tab-content hidden space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h4 class="text-sm font-bold text-white mb-2">📊 SQLite Matriz Dinâmica (digital_twin.dyndb)</h4>
+        <div class="space-y-2 text-xs text-slate-400">
+          <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+            <span class="font-mono text-blue-400 font-semibold">sensores_cadastro</span>
+            <p class="text-[11px] mt-0.5">sensor_id (PK), nome_local, max_capacity, min_baseline, gate_weight, poi_type</p>
+          </div>
+          <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+            <span class="font-mono text-blue-400 font-semibold">leituras_telemetria</span>
+            <p class="text-[11px] mt-0.5">id, sensor_id (FK), timestamp, valor_leitura, tipo_metrica, confianca</p>
+          </div>
+          <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+            <span class="font-mono text-blue-400 font-semibold">eventos_calendario</span>
+            <p class="text-[11px] mt-0.5">evento_id, nome, inicio_ts, fim_ts, publico_estimado, poi_alvo</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
+        <h4 class="text-sm font-bold text-white mb-2">🌍 OGC GeoPackage (projeto_iot.gpkg)</h4>
+        <div class="space-y-2 text-xs text-slate-400">
+          <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+            <span class="font-mono text-emerald-400 font-semibold">sensores_pelourinho (Camada Vetorial)</span>
+            <ul class="list-disc list-inside text-[11px] mt-1 space-y-0.5">
+              <li><code>geom</code>: POINT (EPSG:4326 - WGS84)</li>
+              <li><code>count_pedestrians</code>: Contagem atual em tempo real</li>
+              <li><code>density_m2</code>: Densidade calculada (pessoas/m²)</li>
+              <li><code>status_operacional</code>: NORMAL / ALERTA / SATURADO</li>
+            </ul>
+          </div>
+          <div class="p-2.5 rounded bg-slate-950 border border-slate-800">
+            <span class="font-mono text-purple-400 font-semibold">projeto_iot.qgz & pelourinho_recortado.tif</span>
+            <p class="text-[11px] mt-0.5">Ortofoto de alta resolução e simbologia configurada de gradientes de calor e alertas visuais.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: Central de Requisições -->
+  <div id="tab-requisicoes" class="tab-content hidden space-y-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold text-white">🎯 O Que Você Pode Requisitar Imediatamente</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Clique em qualquer card para copiar o comando de requisição pronto para enviar no chat:</p>
+        </div>
+        <span class="px-2 py-1 rounded bg-blue-500/10 text-blue-400 text-xs font-semibold">Memória Viva Conectada</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Requisicao 1 -->
+        <div class="p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-blue-500/50 transition-all cursor-pointer group" onclick="copyPrompt('Implemente o gerador de dados sintéticos CLI/API consumindo as fórmulas dos Docs 00 a 05 para popular o GeoPackage e SQLite.')">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-blue-400 uppercase">⚡ Backend / Simulação</span>
+            <span class="text-[10px] text-slate-500 group-hover:text-blue-400 transition-colors">Copiar 📋</span>
+          </div>
+          <h4 class="text-sm font-semibold text-white mt-1">1. Gerador de Dados Sintéticos (CLI / API)</h4>
+          <p class="text-xs text-slate-400 mt-1">
+            Implementar o gerador estocástico conectando os 5 modelos matemáticos (Gaussian, Markov, Richards) diretamente ao GeoPackage e SQLite.
+          </p>
+        </div>
+
+        <!-- Requisicao 2 -->
+        <div class="p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-purple-500/50 transition-all cursor-pointer group" onclick="copyPrompt('Complete os endpoints REST da API FastAPI para consulta de dados em tempo real (/api/v1/sensors/live) e status da matriz.')">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-purple-400 uppercase">⚡ Backend API</span>
+            <span class="text-[10px] text-slate-500 group-hover:text-purple-400 transition-colors">Copiar 📋</span>
+          </div>
+          <h4 class="text-sm font-semibold text-white mt-1">2. Completar Endpoints REST FastAPI</h4>
+          <p class="text-xs text-slate-400 mt-1">
+            Criar rotas de telemetria ao vivo, consulta de histórico e endpoints de acionamento de micro-batching.
+          </p>
+        </div>
+
+        <!-- Requisicao 3 -->
+        <div class="p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-emerald-500/50 transition-all cursor-pointer group" onclick="copyPrompt('Crie a tela ou modal de gerenciamento e calibração de parâmetros de simulação sintética no Frontend Leaflet.')">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400 uppercase">🎨 Frontend Web</span>
+            <span class="text-[10px] text-slate-500 group-hover:text-emerald-400 transition-colors">Copiar 📋</span>
+          </div>
+          <h4 class="text-sm font-semibold text-white mt-1">3. Tela de Controle de Simulação no Frontend</h4>
+          <p class="text-xs text-slate-400 mt-1">
+            Interface para ajustar os pesos de portões, disparar eventos com público estimado e acompanhar a atualização do mapa.
+          </p>
+        </div>
+
+        <!-- Requisicao 4 -->
+        <div class="p-4 rounded-xl border border-slate-800 bg-slate-950 hover:border-amber-500/50 transition-all cursor-pointer group" onclick="copyPrompt('Crie uma suíte de testes automatizados com Pytest validando integridade do SQLite WAL, GeoPackage e cálculos matemáticos.')">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-400 uppercase">🧪 QA & Testes</span>
+            <span class="text-[10px] text-slate-500 group-hover:text-amber-400 transition-colors">Copiar 📋</span>
+          </div>
+          <h4 class="text-sm font-semibold text-white mt-1">4. Suíte de Testes Automatizados (Pytest)</h4>
+          <p class="text-xs text-slate-400 mt-1">
+            Validação de integridade do banco SQLite, concorrência no modo WAL, integridade geométrica no GeoPackage e contratos da API.
+          </p>
+        </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div id="toast" class="hidden fixed bottom-6 right-6 px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-lg transition-opacity">
+        Comando copiado para a área de transferência! Cole no chat para executar.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+        btn.classList.add('bg-slate-800', 'text-slate-200');
+      });
+      
+      document.getElementById(tabId).classList.remove('hidden');
+      const activeBtnId = 'btn-' + tabId.replace('tab-', '');
+      const activeBtn = document.getElementById(activeBtnId);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-800', 'text-slate-200');
+        activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+      }
+    }
+
+    function copyPrompt(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const toast = document.getElementById('toast');
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+      });
+    }
+  </script>
+</body>
+</html>
