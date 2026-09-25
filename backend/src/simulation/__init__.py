@@ -13,6 +13,11 @@ from src.simulation.schemas import (
     MacroFlowResponse,
     MacroFlowCurvePoint,
     MacroFlowCurveResponse,
+    NodeCoordinate,
+    MarkovCirculationConfig,
+    MarkovCirculationRequest,
+    MarkovNodeFlow,
+    MarkovCirculationResponse,
 )
 from src.simulation.macro_flow import (
     MacroFlowSimulator,
@@ -27,8 +32,17 @@ from src.simulation.macro_flow import (
     allocate_gates,
     calculate_macro_flow,
 )
+from src.simulation.markov_circulation import (
+    MarkovCirculationSimulator,
+    compute_distance_matrix,
+    evaluate_hourly_attraction,
+    compute_markov_matrix,
+    propagate_flow,
+    propagate_markov_flow,
+)
 
 __all__ = [
+    # Schemas Macro-Fluxo (Doc 01)
     "SensorGateWeight",
     "SensorAllocation",
     "MacroFlowConfig",
@@ -36,6 +50,7 @@ __all__ = [
     "MacroFlowResponse",
     "MacroFlowCurvePoint",
     "MacroFlowCurveResponse",
+    # Motor Macro-Fluxo (Doc 01)
     "MacroFlowSimulator",
     "MacroFlowResult",
     "calculate_circadian_hour",
@@ -47,4 +62,17 @@ __all__ = [
     "distribute_to_gates",
     "allocate_gates",
     "calculate_macro_flow",
+    # Schemas Circulação Markoviana (Doc 03)
+    "NodeCoordinate",
+    "MarkovCirculationConfig",
+    "MarkovCirculationRequest",
+    "MarkovNodeFlow",
+    "MarkovCirculationResponse",
+    # Motor Circulação Markoviana (Doc 03)
+    "MarkovCirculationSimulator",
+    "compute_distance_matrix",
+    "evaluate_hourly_attraction",
+    "compute_markov_matrix",
+    "propagate_flow",
+    "propagate_markov_flow",
 ]

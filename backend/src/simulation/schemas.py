@@ -201,3 +201,178 @@ class MacroFlowCurveResponse(BaseModel):
     t_peak: float
     sigma: float
     curve: List[MacroFlowCurvePoint]
+
+
+# ==============================================================================
+# Schemas para o Subsistema de Circulação de Markov & POIs (Doc 03)
+# ==============================================================================
+
+class NodeCoordinate(BaseModel):
+    """
+    Coordenada geográfica e metadados de atratividade de um nó de rede (Canal A e B).
+    """
+    sensor_id: str = Field(..., description="ID único do sensor")
+    nome_local: str = Field(..., description="Nome amigável do POI ou logradouro")
+    lat: float = Field(..., description="Latitude em graus decimais (WGS84)")
+    lng: float = Field(..., description="Longitude em graus decimais (WGS84)")
+    poi_type: str = Field(default="POI", description="Categoria: GATE, POI, IGREJA, SHOW")
+    base_attraction: float = Field(default=1.0, ge=0.01, description="Peso de atratividade basal alpha_j > 0")
+    gate_weight: float = Field(default=0.0, ge=0.0, le=1.0, description="Peso de entrada w_j (se portão)")
+    max_capacity: int = Field(default=150, gt=0, description="Capacidade máxima de suporte")
+
+
+class MarkovCirculationConfig(BaseModel):
+    """
+    Parâmetros de configuração e calibração espacial da rede de Markov (Canal B).
+    """
+    lambda_decay: float = Field(
+        default=0.015,
+        gt=0.0,
+        description="Taxa de decaimento espacial por metro lambda_d (padrão 0.015 m^-1)",
+    )
+    retention_bias: float = Field(
+        default=1.0,
+        gt=0.0,
+        description="Viés basal de permanência no mesmo nó (termo diagonal P_ii)",
+    )
+    category_attractions: dict[str, float] = Field(
+        default_factory=lambda: {
+            "GATE": 1.0,
+            "POI": 1.5,
+            "IGREJA": 1.8,
+            "SHOW": 2.5,
+        },
+        description="Multiplicadores basais por tipo de atrator urbano",
+    )
+    nodes: List[NodeCoordinate] = Field(
+        default_factory=lambda: [
+            NodeCoordinate(
+                sensor_id="sensor_elevador_lacerda",
+                nome_local="Elevador Lacerda",
+                lat=-12.97330,
+                lng=-38.51260,
+                poi_type="GATE",
+                base_attraction=1.0,
+                gate_weight=0.45,
+                max_capacity=150,
+            ),
+            NodeCoordinate(
+                sensor_id="sensor_praca_da_se",
+                nome_local="Praça da Sé",
+                lat=-12.97380,
+                lng=-38.51090,
+                poi_type="GATE",
+                base_attraction=1.2,
+                gate_weight=0.35,
+                max_capacity=120,
+            ),
+            NodeCoordinate(
+                sensor_id="sensor_ladeira_do_carmo",
+                nome_local="Ladeira do Carmo",
+                lat=-12.96980,
+                lng=-38.50800,
+                poi_type="GATE",
+                base_attraction=0.9,
+                gate_weight=0.20,
+                max_capacity=80,
+            ),
+            NodeCoordinate(
+                sensor_id="sensor_largo_pelourinho",
+                nome_local="Largo do Pelourinho",
+                lat=-12.97180,
+                lng=-38.50850,
+                poi_type="SHOW",
+                base_attraction=2.5,
+                gate_weight=0.00,
+                max_capacity=250,
+            ),
+            NodeCoordinate(
+                sensor_id="sensor_terreiro_jesus",
+                nome_local="Terreiro de Jesus",
+                lat=-12.97310,
+                lng=-38.50970,
+                poi_type="IGREJA",
+                base_attraction=1.8,
+                gate_weight=0.00,
+                max_capacity=200,
+            ),
+        ],
+        description="Rede de nós de monitoramento do Pelourinho com coordenadas e atratores",
+    )
+
+    @model_validator(mode="after")
+    def validate_nodes_not_empty(self) -> "MarkovCirculationConfig":
+        if not self.nodes or len(self.nodes) < 2:
+            raise ValueError("A rede de circulação de Markov precisa de pelo menos 2 nós.")
+        return self
+
+
+class MarkovCirculationRequest(BaseModel):
+    """
+    Payload de requisição para cálculo do ciclo de circulação e redistribuição (Canal C / D).
+    """
+    current_state_N: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor N(t) de pedestres no ciclo anterior. Se omitido, utiliza N_rotina do Doc 01.",
+    )
+    current_time_hours: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Timestamp contínuo t em horas (se omitido, usa relógio do servidor)",
+    )
+    gamma_seasonality: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Multiplicador sazonal da época",
+    )
+    config: Optional[MarkovCirculationConfig] = Field(
+        default=None,
+        description="Configuração personalizada de nós e distâncias (opcional)",
+    )
+    alpha_override: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor explícito de atratividade alpha_j(t) de dimensão J (opcional)",
+    )
+
+
+class MarkovNodeFlow(BaseModel):
+    """Detalhamento de fluxo migratório em um nó individual da malha urbana."""
+    sensor_id: str
+    nome_local: str
+    poi_type: str
+    initial_pedestrians: float = Field(..., description="Pessoas no sensor no início do ciclo N_i(t)")
+    retained_pedestrians: float = Field(..., description="Pessoas que permaneceram no mesmo local (P_ii * N_i)")
+    inflow_pedestrians: float = Field(..., description="Pessoas recebidas de outros sensores vizinhos")
+    outflow_pedestrians: float = Field(..., description="Pessoas que migraram para outros sensores")
+    final_propagated_pedestrians: float = Field(..., description="Lotação propagada final N_j,propagado(t+1)")
+
+
+class MarkovCirculationResponse(BaseModel):
+    """
+    Payload de resposta da propagação de circulação de rede de Markov (Canal D).
+    """
+    timestamp_iso: str = Field(default_factory=lambda: datetime.now().isoformat())
+    current_time_hours: float
+    circadian_hour: float
+    gamma_seasonality: float
+    total_initial_pedestrians: float
+    total_propagated_pedestrians: float
+    vector_N_propagado: List[float] = Field(
+        ...,
+        description="Vetor N_propagado(t+1) em indivíduos para transmissão direta ao barramento",
+    )
+    transition_matrix: List[List[float]] = Field(
+        ...,
+        description="Matriz estocástica de transição P(t) de dimensão J x J (cada linha soma 1.0)",
+    )
+    attraction_vector: List[float] = Field(
+        ...,
+        description="Vetor de atratividades instantâneas alpha_j(t)",
+    )
+    node_flows: List[MarkovNodeFlow]
+    sensor_ids: List[str]
+    conservation_error: float = Field(
+        default=0.0,
+        description="Erro absoluto de conservação |sum(N_prop) - sum(N_ini)|",
+    )
+

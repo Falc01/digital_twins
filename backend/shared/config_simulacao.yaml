@@ -17,3 +17,12 @@ simulation:
       - 0.35                      # Sensor Praça da Sé
       - 0.20                      # Sensor Ladeira do Carmo
       - 0.00                      # Sensor Largo interno (sem acesso externo)
+
+  network_markov:
+    distance_decay_lambda: 0.015  # λ_d: decaimento de atração por metro (Canal B)
+    retention_bias: 1.0           # Viés basal de permanência no mesmo nó (diagonal P_ii)
+    default_poi_attraction:       # α_j padrão por categoria de POI
+      GATE: 1.0                   # Portões de entrada física
+      POI: 1.5                    # Largos turísticos e praças
+      IGREJA: 1.8                 # Atratores religiosos/históricos
+      SHOW: 2.5                   # Espaços culturais e palcos
