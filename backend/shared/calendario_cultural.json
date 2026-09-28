@@ -1,0 +1,20 @@
+[
+  {
+    "regra_id": "terca_bencao_olodum",
+    "dia_semana": 1,
+    "hora_pico": 20.0,
+    "duracao_h": 1.5,
+    "magnitude": 80.0,
+    "sensor_alvo": "sensor_largo_pelourinho",
+    "sensor_index": 3
+  },
+  {
+    "regra_id": "missa_rosario_domingo",
+    "dia_semana": 6,
+    "hora_pico": 9.5,
+    "duracao_h": 1.0,
+    "magnitude": 50.0,
+    "sensor_alvo": "sensor_igreja_rosario",
+    "sensor_index": 2
+  }
+]

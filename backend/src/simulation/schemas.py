@@ -8,7 +8,8 @@ rotas da API FastAPI e barramento de dados sintéticos do Pelourinho.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -375,4 +376,106 @@ class MarkovCirculationResponse(BaseModel):
         default=0.0,
         description="Erro absoluto de conservação |sum(N_prop) - sum(N_ini)|",
     )
+
+
+# ==============================================================================
+# Schemas para Subsistema de Injeção Dinâmica de Eventos (Doc 02)
+# ==============================================================================
+
+class EventRule(BaseModel):
+    """
+    Especificação de Evento Cultural / Espectáculo (Modo 1 e Modo 2).
+    """
+    event_id: str = Field(..., description="Identificador único do evento ou regra de calendário")
+    sensor_index: int = Field(..., ge=0, description="Índice do nó/sensor afetado na matriz (0..J-1)")
+    sensor_alvo: Optional[str] = Field(None, description="ID do sensor ou nome do local (opcional)")
+    peak_hour: float = Field(..., ge=0.0, lt=24.0, description="Horário tau_jm de pico máximo em horas fracionárias")
+    duration_hours: float = Field(..., gt=0.0, description="Largura/dispersão temporal sigma_jm em horas")
+    magnitude: float = Field(..., ge=0.0, description="Amplitude A_jm de lotação agregada pelo evento")
+    day_of_week: Optional[int] = Field(None, ge=0, le=6, description="Dia da semana (0=Segunda, 6=Domingo) para eventos recorrentes")
+    is_recurring: bool = Field(default=False, description="Indica se é uma regra semanal recorrente (Modo 1)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def harmonize_event_fields(cls, values: dict) -> dict:
+        if isinstance(values, dict):
+            if "regra_id" in values and "event_id" not in values:
+                values["event_id"] = values["regra_id"]
+            if "hora_pico" in values and "peak_hour" not in values:
+                values["peak_hour"] = values["hora_pico"]
+            if "duracao_h" in values and "duration_hours" not in values:
+                values["duration_hours"] = values["duracao_h"]
+            if "sensor_id" in values and "sensor_alvo" not in values:
+                values["sensor_alvo"] = values["sensor_id"]
+            if "dia_semana" in values and "day_of_week" not in values:
+                values["day_of_week"] = values["dia_semana"]
+        return values
+
+
+class EventsInjectionConfig(BaseModel):
+    """
+    Configuração global do subsistema de injeção de eventos.
+    """
+    enable_mode1: bool = Field(default=True, description="Habilita Calendário Cultural Fixo (Modo 1)")
+    enable_mode2: bool = Field(default=True, description="Habilita Agenda de Eventos Pontuais (Modo 2)")
+    enable_mode3: bool = Field(default=True, description="Habilita Eventos Estocásticos Monte Carlo (Modo 3)")
+    monte_carlo_prob: float = Field(default=0.15, ge=0.0, le=1.0, description="Probabilidade p de manifestação espontânea à tarde")
+    min_capacity_ratio: float = Field(default=0.30, ge=0.0, le=1.0, description="Piso mínimo de corte de capacidade (0.30 * N_max)")
+    max_capacity_ratio: float = Field(default=0.95, ge=0.0, le=1.0, description="Teto máximo de trava de capacidade (0.95 * N_max)")
+
+
+class EventsInjectionRequest(BaseModel):
+    """
+    Payload de requisição para cálculo do vetor de injeção de eventos E(t) (Canal C).
+    """
+    current_time_hours: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Timestamp contínuo t em horas (se omitido, usa horário atual do sistema)",
+    )
+    day_of_week: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=6,
+        description="Dia da semana 0..6 (se omitido, usa dia atual do sistema)",
+    )
+    node_capacities: Optional[List[int]] = Field(
+        default=None,
+        description="Vetor com capacidade máxima N_j_max de cada nó/sensor (Canal A)",
+    )
+    events_registry: Optional[List[EventRule]] = Field(
+        default=None,
+        description="Lista de eventos agendados para avaliação (Canal C)",
+    )
+    enable_mode1: bool = Field(default=True, description="Ativar Modo 1 (Calendário Cultural Fixo)")
+    enable_mode2: bool = Field(default=True, description="Ativar Modo 2 (Agenda Externa Pontual)")
+    enable_mode3: bool = Field(default=True, description="Ativar Modo 3 (Monte Carlo Estocástico)")
+
+
+class EventNodeBonus(BaseModel):
+    """Bônus de público injetado em um nó específico."""
+    sensor_id: str
+    sensor_index: int
+    event_bonus: float = Field(..., description="Volume E_j(t) de público injetado pelo evento (indivíduos)")
+    node_capacity: int = Field(..., description="Capacidade máxima N_j_max do nó")
+    active_events_count: int = Field(..., description="Número de eventos ativos impactando este nó")
+
+
+class EventsInjectionResponse(BaseModel):
+    """
+    Payload de resposta contendo o vetor de injeção de eventos E(t) (Canal D).
+    """
+    timestamp_iso: str = Field(default_factory=lambda: datetime.now().isoformat())
+    current_time_hours: float
+    day_of_week: int
+    vector_E_eventos: List[float] = Field(
+        ...,
+        description="Vetor nodal E(t) em array float64 de tamanho J para transmissão ao Doc 04",
+    )
+    node_bonuses: List[EventNodeBonus]
+    active_events: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lista de eventos que contribuíram ativamente com E_j > 0.01",
+    )
+
 

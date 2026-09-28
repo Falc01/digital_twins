@@ -18,6 +18,11 @@ from src.simulation.schemas import (
     MarkovCirculationRequest,
     MarkovNodeFlow,
     MarkovCirculationResponse,
+    EventRule,
+    EventsInjectionConfig,
+    EventsInjectionRequest,
+    EventNodeBonus,
+    EventsInjectionResponse,
 )
 from src.simulation.macro_flow import (
     MacroFlowSimulator,
@@ -39,6 +44,12 @@ from src.simulation.markov_circulation import (
     compute_markov_matrix,
     propagate_flow,
     propagate_markov_flow,
+)
+from src.simulation.events_injection import (
+    EventsInjectionSimulator,
+    calculate_gaussian_pulse,
+    clip_event_magnitude,
+    calculate_events_injection,
 )
 
 __all__ = [
@@ -75,4 +86,16 @@ __all__ = [
     "compute_markov_matrix",
     "propagate_flow",
     "propagate_markov_flow",
+    # Schemas Injeção de Eventos (Doc 02)
+    "EventRule",
+    "EventsInjectionConfig",
+    "EventsInjectionRequest",
+    "EventNodeBonus",
+    "EventsInjectionResponse",
+    # Motor Injeção de Eventos (Doc 02)
+    "EventsInjectionSimulator",
+    "calculate_gaussian_pulse",
+    "clip_event_magnitude",
+    "calculate_events_injection",
 ]
+

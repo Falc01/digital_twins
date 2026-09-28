@@ -19,6 +19,10 @@ from src.simulation.markov_circulation import (
     MarkovCirculationSimulator,
     propagate_markov_flow,
 )
+from src.simulation.events_injection import (
+    EventsInjectionSimulator,
+    calculate_events_injection,
+)
 from src.simulation.schemas import (
     MacroFlowConfig,
     MacroFlowCurvePoint,
@@ -28,7 +32,12 @@ from src.simulation.schemas import (
     MarkovCirculationConfig,
     MarkovCirculationRequest,
     MarkovCirculationResponse,
+    EventsInjectionConfig,
+    EventsInjectionRequest,
+    EventsInjectionResponse,
+    EventRule,
 )
+
 from src.api.dependencies import TableManagerDep
 from src.api.routers.sensors import get_sensors_list
 
@@ -212,3 +221,51 @@ def propagate_markov_network(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na circulação de Markov: {str(e)}")
+
+
+# ==============================================================================
+# Endpoints do Subsistema de Injeção de Eventos & Padrões Culturais (Doc 02)
+# ==============================================================================
+
+_DEFAULT_EVENTS_SIMULATOR = EventsInjectionSimulator()
+
+
+@router.get("/events/config", response_model=EventsInjectionConfig)
+def get_events_config() -> EventsInjectionConfig:
+    """
+    Retorna os parâmetros de calibração do Subsistema de Eventos (Doc 02).
+    """
+    return _DEFAULT_EVENTS_SIMULATOR.config
+
+
+@router.post("/events", response_model=EventsInjectionResponse)
+@router.post("/events/calculate", response_model=EventsInjectionResponse)
+def calculate_events_injection_endpoint(
+    payload: EventsInjectionRequest,
+) -> EventsInjectionResponse:
+    """
+    Calcula o acréscimo pontual de público E(t) em R^J injetado por eventos culturais,
+    shows e manifestações espontâneas no Pelourinho (Doc 02).
+    
+    Conforme a nota de engenharia (Doc 02, Seção 3.2.B), este endpoint permite
+    à interface gráfica enviar/atualizar eventos dinâmicos via POST /api/v1/simulation/events.
+    """
+    try:
+        cfg = EventsInjectionConfig(
+            enable_mode1=payload.enable_mode1,
+            enable_mode2=payload.enable_mode2,
+            enable_mode3=payload.enable_mode3,
+        )
+        sim = EventsInjectionSimulator(config=cfg)
+        response = sim.evaluate(
+            current_time_hours=payload.current_time_hours,
+            day_of_week=payload.day_of_week,
+            node_capacities=payload.node_capacities,
+            events_registry=payload.events_registry,
+        )
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na injeção de eventos: {str(e)}")
+

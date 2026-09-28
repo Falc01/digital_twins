@@ -1,0 +1,18 @@
+[
+  {
+    "event_id": "olodum_ensaio_especial",
+    "sensor_index": 3,
+    "sensor_alvo": "sensor_largo_pelourinho",
+    "peak_hour": 20.0,
+    "duration_hours": 1.5,
+    "magnitude": 80.0
+  },
+  {
+    "event_id": "festival_portas_do_carmo",
+    "sensor_index": 2,
+    "sensor_alvo": "sensor_ladeira_do_carmo",
+    "peak_hour": 17.0,
+    "duration_hours": 2.0,
+    "magnitude": 60.0
+  }
+]
