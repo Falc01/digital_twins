@@ -34,6 +34,7 @@ class MacroFlowConfig(BaseModel):
     t_peak: float = Field(default=16.5, ge=0.0, lt=24.0, description="Horário central do pico em horas fracionárias (ex: 16.5 = 16h30)")
     sigma: float = Field(default=3.0, gt=0.0, description="Largura temporal / espalhamento da janela turística em horas")
     T_cycle: float = Field(default=24.0, gt=0.0, description="Período fundamental circadiano (24h)")
+    step_minutes: float = Field(default=5.0, gt=0.0, description="Intervalo temporal do ciclo de simulação em minutos (Δt)")
     gates: List[SensorGateWeight] = Field(
         default_factory=lambda: [
             SensorGateWeight(
@@ -75,6 +76,11 @@ class MacroFlowConfig(BaseModel):
         default_factory=lambda: [0.45, 0.35, 0.20, 0.00],
         description="Vetor de pesos dos portões de entrada (soma estritamente unitária 1.0)",
     )
+
+    @property
+    def step_hours(self) -> float:
+        """Retorna o passo temporal Δt convertido em horas."""
+        return self.step_minutes / 60.0
 
     @model_validator(mode="before")
     @classmethod
@@ -126,6 +132,11 @@ class MacroFlowRequest(BaseModel):
         ge=0.0,
         description="Tempo contínuo atual de simulação em horas (se omitido, usa hora atual do sistema)",
     )
+    step_minutes: Optional[float] = Field(
+        default=5.0,
+        gt=0.0,
+        description="Duração do passo de tempo em minutos (Δt) para cálculo diferencial",
+    )
     gamma_seasonality: float = Field(
         default=1.0,
         ge=0.0,
@@ -133,6 +144,10 @@ class MacroFlowRequest(BaseModel):
     )
     config: Optional[MacroFlowConfig] = Field(default=None, description="Configuração personalizada (opcional)")
     config_override: Optional[MacroFlowConfig] = Field(default=None, description="Alias para config")
+    use_incremental: Optional[bool] = Field(
+        default=False,
+        description="Se True, atribui a N_rotina os novos ingressos incrementais ΔN_rotina(t) em vez do volume acumulado",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -151,6 +166,18 @@ class SensorAllocation(BaseModel):
     nome_local: str
     gate_weight: float
     count_pedestrians: float = Field(..., description="Volume N_rotina,j(t) em indivíduos")
+    incremental_pedestrians: float = Field(default=0.0, description="Taxa/volume incremental de novos ingressos ΔN_rotina,j(t) no passo Δt")
+    delta_pedestrians: float = Field(default=0.0, description="Alias para incremental_pedestrians")
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_allocation_aliases(cls, values: dict) -> dict:
+        if isinstance(values, dict):
+            if "incremental_pedestrians" in values and "delta_pedestrians" not in values:
+                values["delta_pedestrians"] = values["incremental_pedestrians"]
+            elif "delta_pedestrians" in values and "incremental_pedestrians" not in values:
+                values["incremental_pedestrians"] = values["delta_pedestrians"]
+        return values
 
 
 class MacroFlowResponse(BaseModel):
@@ -160,11 +187,16 @@ class MacroFlowResponse(BaseModel):
     timestamp_iso: str = Field(default_factory=lambda: datetime.now().isoformat())
     current_time_hours: float = Field(..., description="Timestamp de entrada em horas")
     circadian_hour: float = Field(..., description="Hora do relógio circadiano h(t) em [0, 24)")
+    step_minutes: float = Field(default=5.0, description="Duração do ciclo temporal de simulação Δt em minutos")
     gamma_seasonality: float = Field(..., description="Multiplicador sazonal aplicado")
     N_bairro_total: float = Field(..., description="Lotação global calculada para o Pelourinho N_bairro(t)")
     total_bairro_volume: float = Field(..., description="Alias para N_bairro_total")
+    delta_N_bairro: float = Field(default=0.0, description="Variação positiva incremental de novos ingressos no bairro ΔN")
+    rate_pedestrians_per_minute: float = Field(default=0.0, description="Taxa de influxo de novos pedestres por minuto no bairro")
     N_rotina: List[float] = Field(..., description="Vetor N_rotina(t) em indivíduos para cada portão/sensor")
     vector_N_rotina: List[float] = Field(..., description="Alias para N_rotina")
+    delta_N_rotina: List[float] = Field(default_factory=list, description="Vetor de influxo incremental ΔN_rotina(t) para cada portão no passo Δt")
+    vector_delta_N_rotina: List[float] = Field(default_factory=list, description="Alias para delta_N_rotina")
     allocations: List[SensorAllocation] = Field(default_factory=list, description="Lista de alocações por sensor")
     sensor_ids: Optional[List[str]] = Field(default=None, description="IDs dos sensores correspondentes")
 
@@ -183,6 +215,12 @@ class MacroFlowResponse(BaseModel):
                 values["N_rotina"] = values["vector_N_rotina"]
             elif "N_rotina" in values and "vector_N_rotina" not in values:
                 values["vector_N_rotina"] = values["N_rotina"]
+
+            # Sincroniza vetor delta_N_rotina
+            if "vector_delta_N_rotina" in values and "delta_N_rotina" not in values:
+                values["delta_N_rotina"] = values["vector_delta_N_rotina"]
+            elif "delta_N_rotina" in values and "vector_delta_N_rotina" not in values:
+                values["vector_delta_N_rotina"] = values["delta_N_rotina"]
         return values
 
 

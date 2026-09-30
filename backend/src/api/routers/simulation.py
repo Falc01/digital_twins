@@ -84,6 +84,8 @@ def calculate_macro_flow_endpoint(
             gamma_seasonality=payload.gamma_seasonality,
             config=payload.config or payload.config_override,
             sensor_ids=sensor_ids if sensor_ids else None,
+            step_minutes=payload.step_minutes,
+            use_incremental=payload.use_incremental or False,
         )
         return response
     except ValueError as e:
@@ -106,6 +108,7 @@ def evaluate_macro_flow(payload: MacroFlowRequest) -> MacroFlowResponse:
     result = sim.evaluate(
         t_hours=payload.current_time_hours,
         gamma=payload.gamma_seasonality,
+        step_minutes=payload.step_minutes,
     )
     return result.to_response()
 
@@ -122,9 +125,15 @@ def get_macro_flow_instant(
         le=10.0,
         description="Fator sazonal gamma (1.0 dias comuns, 1.5 verão, 3.5 carnaval)",
     ),
+    step_minutes: float = Query(
+        5.0,
+        ge=0.1,
+        le=120.0,
+        description="Intervalo de ciclo temporal Δt em minutos para cálculo diferencial",
+    ),
 ) -> MacroFlowResponse:
     """Consulta rápida via GET do estado do macro-fluxo instantâneo."""
-    result = _DEFAULT_SIMULATOR.evaluate(t_hours=time_hours, gamma=gamma)
+    result = _DEFAULT_SIMULATOR.evaluate(t_hours=time_hours, gamma=gamma, step_minutes=step_minutes)
     return result.to_response()
 
 

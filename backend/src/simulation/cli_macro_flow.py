@@ -42,6 +42,14 @@ def main():
         help="Fator sazonal multiplicador (1.0 = dia útil, 1.5 = alta estação/verão, 3.5 = carnaval).",
     )
     parser.add_argument(
+        "--dt",
+        "--step-minutes",
+        dest="step_minutes",
+        type=float,
+        default=5.0,
+        help="Duração do ciclo temporal em minutos (Δt) para cálculo diferencial (padrão: 5.0 min).",
+    )
+    parser.add_argument(
         "--curve",
         action="store_true",
         help="Exibe a série temporal completa de 24 horas no terminal.",
@@ -76,7 +84,7 @@ def main():
             print("=" * 60)
         return
 
-    result = sim.evaluate(t_hours=args.time, gamma=args.gamma)
+    result = sim.evaluate(t_hours=args.time, gamma=args.gamma, step_minutes=args.step_minutes)
 
     if args.json:
         data = result.to_response()
@@ -84,19 +92,27 @@ def main():
         print(json.dumps(dump_fn(), indent=2, ensure_ascii=False, default=str))
     else:
         print("\n🌐 Gêmeo Digital IoT Pelourinho — Simulação de Macro-Fluxo (Doc 01)")
-        print("=" * 65)
+        print("=" * 70)
         print(f" Timestamp ISO        : {result.timestamp_iso}")
         print(f" Hora Contínua t      : {result.t_hours:.2f}h")
         print(f" Hora Circadiana h(t) : {result.circadian_h:.2f}h")
+        print(f" Ciclo Temporal (Δt)  : {result.step_minutes:.1f} minutos")
         print(f" Fator Sazonal (γ)    : {result.gamma:.2f}")
         print(f" Volume Total Bairro  : {result.N_bairro:.2f} indivíduos")
-        print("-" * 65)
+        print(f" Influxo Bairro (ΔN)  : {result.delta_N_bairro:.2f} novos indivíduos / {result.step_minutes:.1f} min")
+        print(f" Taxa de Influxo      : {result.rate_pedestrians_per_minute:.3f} pedestres/min")
+        print("-" * 70)
         print(" Alocação nos Portões de Entrada (w_j):")
         for alloc in result.allocations:
             pct = alloc.gate_weight * 100
-            print(f"  • {alloc.nome_local:<30} ({pct:>5.1f}%): {alloc.count_pedestrians:>6.1f} pessoas")
-        print("=" * 65)
-        print(f" Vetor N_rotina(t) para o Barramento : {result.vector_N_rotina}\n")
+            print(
+                f"  • {alloc.nome_local:<30} ({pct:>5.1f}%): "
+                f"Lotação = {alloc.count_pedestrians:>6.1f} | "
+                f"Novo Influxo (ΔN) = {alloc.incremental_pedestrians:>5.2f}"
+            )
+        print("=" * 70)
+        print(f" Vetor N_rotina(t) (Absoluto)   : {result.vector_N_rotina}")
+        print(f" Vetor ΔN_rotina(t) (Incremental): {result.vector_delta_N_rotina}\n")
 
 
 if __name__ == "__main__":

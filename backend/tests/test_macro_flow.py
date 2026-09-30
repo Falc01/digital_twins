@@ -21,12 +21,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 from src.simulation.macro_flow import (
     MacroFlowSimulator,
+    BairroPopulation,
     calculate_circadian_hour,
     circadian_hour,
     calculate_bairro_population,
     calculate_bairro_volume,
+    calculate_bairro_influx,
     distribute_to_gates,
     allocate_gates,
+    distribute_influx_to_gates,
     normalize_gate_weights,
     calculate_macro_flow,
 )
@@ -303,6 +306,65 @@ class TestMacroFlowSubsystem(unittest.TestCase):
         self.assertEqual(len(resp.allocations), 4)
         self.assertEqual(len(resp.vector_N_rotina), 4)
         self.assertTrue(resp.timestamp_iso)
+
+    def test_differential_influx_item1(self):
+        """Item 1: Testa cálculo da taxa diferencial de novos ingressos ΔN por portão."""
+        # Às 14h00, a curva está em ascensão
+        delta_N, rate_min = calculate_bairro_influx(
+            current_time_hours=14.0,
+            step_minutes=5.0,
+            N_max=300,
+            N_min=15,
+            t_peak=16.5,
+            sigma=3.0,
+            gamma_seasonality=1.0,
+        )
+        self.assertGreater(delta_N, 0.0, "Às 14h a curva está em expansão, logo ΔN deve ser positivo")
+        self.assertAlmostEqual(rate_min, delta_N / 5.0, places=4)
+
+        # Distribuição de ΔN pelos portões
+        w_weights = [0.45, 0.35, 0.20, 0.00]
+        gate_influx = distribute_influx_to_gates(delta_N, w_weights)
+        self.assertAlmostEqual(sum(gate_influx), delta_N, places=4, msg="Conservação de fluxo em ΔN")
+        self.assertAlmostEqual(gate_influx[0], 0.45 * delta_N, places=4)
+        self.assertAlmostEqual(gate_influx[3], 0.0, places=4)
+
+        # No pico às 16h30, a taxa de novos ingressos líquidos converge para zero (não há crescimento)
+        delta_peak, _ = calculate_bairro_influx(current_time_hours=16.5, step_minutes=5.0)
+        self.assertEqual(delta_peak, 0.0, "No ápice e pós-pico, ΔN = max(0, N(t+dt)-N(t)) deve ser 0")
+
+    def test_step_minutes_granularity_item2(self):
+        """Item 2: Testa a influência da granularidade temporal Δt (step_minutes)."""
+        # Comparação de passo de 2.5 min vs 5.0 min às 12h00
+        pop_2_5 = calculate_bairro_population(current_time_hours=12.0, step_minutes=2.5)
+        pop_5_0 = calculate_bairro_population(current_time_hours=12.0, step_minutes=5.0)
+        
+        # O volume instantâneo N_bairro(t) deve ser idêntico
+        self.assertAlmostEqual(pop_2_5.N_bairro, pop_5_0.N_bairro, places=4)
+        self.assertEqual(pop_2_5.circadian_hour, 12.0)
+        
+        # O incremento acumulado em 5 min deve ser aproximadamente o dobro de 2.5 min
+        self.assertAlmostEqual(pop_5_0.delta_N, pop_2_5.delta_N * 2.0, delta=0.1)
+        # E a taxa por minuto deve ser quase idêntica (consistência de velocidade)
+        self.assertAlmostEqual(pop_2_5.rate_per_minute, pop_5_0.rate_per_minute, delta=0.05)
+
+    def test_api_differential_flow_integration(self):
+        """Valida que endpoints da API retornam os campos de fluxo incremental."""
+        payload = {
+            "current_time_hours": 14.0,
+            "step_minutes": 5.0,
+            "gamma_seasonality": 1.0,
+            "use_incremental": True,
+        }
+        res = client.post("/api/v1/simulation/macro-flow/calculate", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["step_minutes"], 5.0)
+        self.assertGreater(data["delta_N_bairro"], 0.0)
+        self.assertEqual(len(data["delta_N_rotina"]), 4)
+        self.assertAlmostEqual(sum(data["delta_N_rotina"]), data["delta_N_bairro"], places=3)
+        # Com use_incremental=True, N_rotina reflete o fluxo incremental
+        self.assertEqual(data["N_rotina"], data["delta_N_rotina"])
 
 
 if __name__ == "__main__":
