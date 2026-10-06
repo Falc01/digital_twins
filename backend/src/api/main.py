@@ -142,11 +142,19 @@ app.include_router(sensors.router)
 app.include_router(simulation.router)
 
 
-# Endpoints de listagem de tipos de dados (DynTypes)
 @app.get("/api/types", tags=["types"])
 @app.get("/types", tags=["types"])
 def get_types():
     return [t.name for t in DynType]
+
+
+# Endpoints diretos de Telemetria IoT para Leaflet e QGIS (Doc 04 / RF05)
+@app.get("/api/v1/telemetry/latest", tags=["telemetry"])
+@app.get("/api/telemetry/latest", tags=["telemetry"])
+@app.get("/telemetry/latest", tags=["telemetry"])
+def get_telemetry_latest_direct():
+    from src.simulation.sensor_saturation import _DEFAULT_SATURATION_SIMULATOR
+    return _DEFAULT_SATURATION_SIMULATOR.get_latest_telemetry()
 
 
 @app.get("/", tags=["root"])

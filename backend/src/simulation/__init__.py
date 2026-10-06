@@ -23,6 +23,14 @@ from src.simulation.schemas import (
     EventsInjectionRequest,
     EventNodeBonus,
     EventsInjectionResponse,
+    SensorNoiseType,
+    SensorNodeMetadata,
+    RichardsSaturationConfig,
+    SensorNoiseConfig,
+    SensorSaturationConfig,
+    SensorSaturationRequest,
+    SensorTelemetryItem,
+    SensorTelemetryResponse,
 )
 from src.simulation.macro_flow import (
     MacroFlowSimulator,
@@ -54,6 +62,14 @@ from src.simulation.events_injection import (
     calculate_gaussian_pulse,
     clip_event_magnitude,
     calculate_events_injection,
+)
+from src.simulation.sensor_saturation import (
+    SensorSaturationSimulator,
+    calculate_richards_saturation,
+    generate_sensor_noise,
+    clip_and_discretize_sensor_readings,
+    determine_sensor_status,
+    simulate_sensor_telemetry,
 )
 
 __all__ = [
@@ -105,5 +121,21 @@ __all__ = [
     "calculate_gaussian_pulse",
     "clip_event_magnitude",
     "calculate_events_injection",
+    # Schemas Saturação Richards & Ruído IoT (Doc 04)
+    "SensorNoiseType",
+    "SensorNodeMetadata",
+    "RichardsSaturationConfig",
+    "SensorNoiseConfig",
+    "SensorSaturationConfig",
+    "SensorSaturationRequest",
+    "SensorTelemetryItem",
+    "SensorTelemetryResponse",
+    # Motor Saturação Richards & Ruído IoT (Doc 04)
+    "SensorSaturationSimulator",
+    "calculate_richards_saturation",
+    "generate_sensor_noise",
+    "clip_and_discretize_sensor_readings",
+    "determine_sensor_status",
+    "simulate_sensor_telemetry",
 ]
 

@@ -26,3 +26,14 @@ simulation:
       POI: 1.5                    # Largos turísticos e praças
       IGREJA: 1.8                 # Atratores religiosos/históricos
       SHOW: 2.5                   # Espaços culturais e palcos
+
+  sensor_saturation:
+    richards_kappa: 0.08          # κ: declividade da saturação logística de Richards
+    inflection_ratio: 0.5         # Fração de N_max para inflexão λ_0 = N_max * 0.5
+    zero_anchored: true           # Garante S(0) = 0 sem pedestres fantasmas
+    default_noise_method: "ORNSTEIN_UHLENBECK" # Método de ruído instrumental (NONE, UNIFORM, GAUSSIAN, ORNSTEIN_UHLENBECK)
+    uniform_R: 3.0                # R: semi-intervalo de variação em pedestres
+    gaussian_sigma: 2.5           # σ: desvio padrão do ruído branco gaussiano
+    ou_theta: 1.2                 # θ: taxa horária de reversão à média (h^-1)
+    ou_sigma: 2.0                 # σ_sensor: volatilidade da difusão instrumental
+

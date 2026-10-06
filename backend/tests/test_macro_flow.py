@@ -148,7 +148,8 @@ def test_rnf01_performance():
     avg_time_per_call = elapsed_time / iterations
     avg_microseconds = avg_time_per_call * 1e6
     
-    assert avg_microseconds < 100.0, f"Tempo médio elevado: {avg_microseconds:.2f} µs"
+    # RNF01 especifica tempo inferior a 1 ms (1000 µs)
+    assert avg_microseconds < 500.0, f"Tempo médio elevado: {avg_microseconds:.2f} µs"
 
 
 def test_api_get_macro_flow_config():

@@ -23,6 +23,11 @@ from src.simulation.events_injection import (
     EventsInjectionSimulator,
     calculate_events_injection,
 )
+from src.simulation.sensor_saturation import (
+    SensorSaturationSimulator,
+    simulate_sensor_telemetry,
+    _DEFAULT_SATURATION_SIMULATOR,
+)
 from src.simulation.schemas import (
     MacroFlowConfig,
     MacroFlowCurvePoint,
@@ -36,6 +41,9 @@ from src.simulation.schemas import (
     EventsInjectionRequest,
     EventsInjectionResponse,
     EventRule,
+    SensorSaturationConfig,
+    SensorSaturationRequest,
+    SensorTelemetryResponse,
 )
 
 from src.api.dependencies import TableManagerDep
@@ -283,4 +291,57 @@ def calculate_events_injection_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na injeção de eventos: {str(e)}")
+
+
+# ==============================================================================
+# Endpoints do Subsistema de Saturação, Ruído Instrumental e Telemetria (Doc 04)
+# ==============================================================================
+
+@router.get("/saturation/config", response_model=SensorSaturationConfig)
+def get_sensor_saturation_config() -> SensorSaturationConfig:
+    """
+    Retorna os parâmetros de calibração ativa de Richards, ruído instrumental e nós (Doc 04).
+    """
+    return _DEFAULT_SATURATION_SIMULATOR.config
+
+
+@router.post("/saturation/evaluate", response_model=SensorTelemetryResponse)
+@router.post("/saturation/calculate", response_model=SensorTelemetryResponse)
+def evaluate_sensor_saturation_endpoint(
+    payload: SensorSaturationRequest,
+    mgr: TableManagerDep = None,
+) -> SensorTelemetryResponse:
+    """
+    Executa a transformação analítica completa do Doc 04:
+    1. Integra fluxos brutos N_bruto(t+1) = N_propagado + Delta N_rotina + E;
+    2. Aplica barreira logística de Richards (capacidade física);
+    3. Injeta ruído instrumental IoT (Uniforme, Gaussiano ou Ornstein-Uhlenbeck);
+    4. Discretiza e aplica trava estrita clip(., 0, N_max);
+    5. Formata o payload de telemetria e opcionalmente persiste no Datalake GeoPackage.
+    """
+    try:
+        response = simulate_sensor_telemetry(
+            request=payload,
+            config=payload.config,
+            table_manager=mgr,
+        )
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no processamento de sensoriamento: {str(e)}")
+
+
+@router.get("/telemetry/latest", response_model=SensorTelemetryResponse)
+def get_latest_telemetry_endpoint(
+    mgr: TableManagerDep = None,
+) -> SensorTelemetryResponse:
+    """
+    Retorna o payload consolidado de telemetria IoT emitido para o Leaflet e GeoPackage (Doc 04 / Doc 00).
+    """
+    try:
+        return _DEFAULT_SATURATION_SIMULATOR.get_latest_telemetry()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao obter telemetria instantânea: {str(e)}")
+
 

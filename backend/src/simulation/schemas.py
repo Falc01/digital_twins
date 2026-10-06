@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
@@ -628,5 +629,277 @@ class EventsInjectionResponse(BaseModel):
         default_factory=list,
         description="Lista de eventos que contribuíram ativamente com E_j > 0.01",
     )
+
+
+# ==============================================================================
+# Schemas para Saturação de Richards, Ruído Instrumental IoT & Telemetria (Doc 04)
+# ==============================================================================
+
+class SensorNoiseType(str, Enum):
+    """Métodos de perturbação estocástica instrumental dos sensores IoT (RF03)."""
+    NONE = "NONE"
+    UNIFORM = "UNIFORM"
+    GAUSSIAN = "GAUSSIAN"
+    ORNSTEIN_UHLENBECK = "ORNSTEIN_UHLENBECK"
+    OU = "OU"
+
+
+class SensorNodeMetadata(BaseModel):
+    """Metadados físicos e espaciais de um nó de sensoriamento IoT."""
+    sensor_id: str = Field(..., description="Identificador único do nó/sensor")
+    nome_local: str = Field(..., description="Nome amigável do logradouro ou POI monitorado")
+    max_capacity: int = Field(default=150, gt=0, description="Teto físico intransponível N_j,max (Canal A)")
+    kappa: float = Field(default=0.08, gt=0.0, description="Declividade logística de Richards kappa_j")
+    inflection_point: Optional[float] = Field(
+        default=None,
+        description="Ponto médio lambda_0,j. Se omitido, utiliza max_capacity * 0.5",
+    )
+    lat: Optional[float] = Field(default=None, description="Latitude WGS84")
+    lng: Optional[float] = Field(default=None, description="Longitude WGS84")
+    area_m2: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Área de cobertura em m² para cálculo de densidade de pedestres",
+    )
+
+
+class RichardsSaturationConfig(BaseModel):
+    """Parâmetros da barreira de capacidade logística de Richards (Canal B)."""
+    kappa: float = Field(
+        default=0.08,
+        gt=0.0,
+        description="Declividade da função sigmoide logística kappa (padrão 0.08 h^-1)",
+    )
+    inflection_ratio: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description="Fração de N_max onde ocorre a inflexão lambda_0 = N_max * inflection_ratio",
+    )
+    zero_anchored: bool = Field(
+        default=True,
+        description="Garante que S_adj(0) = 0, eliminando pedestres fantasmas em ruas vazias",
+    )
+
+
+class SensorNoiseConfig(BaseModel):
+    """Parâmetros dos métodos de ruído instrumental estocástico (RF03)."""
+    method: SensorNoiseType = Field(
+        default=SensorNoiseType.ORNSTEIN_UHLENBECK,
+        description="Método de ruído ativo: NONE, UNIFORM, GAUSSIAN ou ORNSTEIN_UHLENBECK",
+    )
+    uniform_range_R: float = Field(
+        default=3.0,
+        ge=0.0,
+        description="Semi-intervalo R para ruído uniforme U(-R, +R) em pessoas (padrão 3.0)",
+    )
+    gaussian_sigma: float = Field(
+        default=2.5,
+        ge=0.0,
+        description="Desvio padrão sigma_ruido para ruído gaussiano N(0, sigma^2) em pessoas (padrão 2.5)",
+    )
+    ou_theta: float = Field(
+        default=1.2,
+        gt=0.0,
+        description="Taxa horária theta de reversão à média no processo de Ornstein-Uhlenbeck (padrão 1.2 h^-1)",
+    )
+    ou_sigma: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Volatilidade sigma_sensor da difusão no processo de Ornstein-Uhlenbeck (padrão 2.0)",
+    )
+    seed: Optional[int] = Field(
+        default=None,
+        description="Semente para reprodutibilidade estocástica em testes e calibrações",
+    )
+
+
+class SensorSaturationConfig(BaseModel):
+    """Configuração consolidada do subsistema de saturação, ruído e sensoriamento IoT."""
+    richards: RichardsSaturationConfig = Field(
+        default_factory=RichardsSaturationConfig,
+        description="Parâmetros da barreira de saturação de Richards",
+    )
+    noise: SensorNoiseConfig = Field(
+        default_factory=SensorNoiseConfig,
+        description="Parâmetros de ruído instrumental IoT",
+    )
+    step_minutes: float = Field(
+        default=5.0,
+        gt=0.0,
+        description="Passo temporal Delta t em minutos para discretização de Ornstein-Uhlenbeck",
+    )
+    nodes: List[SensorNodeMetadata] = Field(
+        default_factory=lambda: [
+            SensorNodeMetadata(
+                sensor_id="sensor_elevador_lacerda",
+                nome_local="Elevador Lacerda",
+                max_capacity=150,
+                kappa=0.08,
+                lat=-12.97330,
+                lng=-38.51260,
+                area_m2=150.0,
+            ),
+            SensorNodeMetadata(
+                sensor_id="sensor_praca_da_se",
+                nome_local="Praça da Sé",
+                max_capacity=120,
+                kappa=0.08,
+                lat=-12.97380,
+                lng=-38.51090,
+                area_m2=120.0,
+            ),
+            SensorNodeMetadata(
+                sensor_id="sensor_ladeira_do_carmo",
+                nome_local="Ladeira do Carmo",
+                max_capacity=80,
+                kappa=0.08,
+                lat=-12.96980,
+                lng=-38.50800,
+                area_m2=80.0,
+            ),
+            SensorNodeMetadata(
+                sensor_id="sensor_largo_pelourinho",
+                nome_local="Largo do Pelourinho",
+                max_capacity=250,
+                kappa=0.08,
+                lat=-12.97180,
+                lng=-38.50850,
+                area_m2=250.0,
+            ),
+            SensorNodeMetadata(
+                sensor_id="sensor_terreiro_jesus",
+                nome_local="Terreiro de Jesus",
+                max_capacity=200,
+                kappa=0.08,
+                lat=-12.97310,
+                lng=-38.50970,
+                area_m2=200.0,
+            ),
+        ],
+        description="Lista de nós de sensoriamento com suas capacidades e metadados",
+    )
+
+
+class SensorSaturationRequest(BaseModel):
+    """Payload de requisição para execução do subsistema de sensoriamento (Doc 04)."""
+    N_bruto: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor de fluxo físico bruto consolidado N_bruto(t+1) em R^J. Se informado, pula a soma dos 3 canais.",
+    )
+    vector_N_bruto: Optional[List[float]] = Field(
+        default=None,
+        description="Alias para N_bruto",
+    )
+    N_propagado: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor N_propagado(t+1) originado do Doc 03",
+    )
+    vector_N_propagado: Optional[List[float]] = Field(
+        default=None,
+        description="Alias para N_propagado",
+    )
+    N_rotina: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor N_rotina(t) originado do Doc 01",
+    )
+    delta_N_rotina: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor de novos ingressos Delta N_rotina(t) originado do Doc 01",
+    )
+    vector_E_eventos: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor E(t) de acréscimo de eventos originado do Doc 02",
+    )
+    current_time_hours: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Timestamp contínuo t em horas (se omitido, usa hora atual)",
+    )
+    step_minutes: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Duração do ciclo temporal Delta t em minutos",
+    )
+    noise_method: Optional[str] = Field(
+        default=None,
+        description="Override opcional do método de ruído (NONE, UNIFORM, GAUSSIAN, ORNSTEIN_UHLENBECK)",
+    )
+    persist_telemetry: bool = Field(
+        default=False,
+        description="Se True, persiste as leituras na tabela telemetria_sensores do Datalake",
+    )
+    reset_noise_state: bool = Field(
+        default=False,
+        description="Se True, zera a memória de estado anterior do ruído de Ornstein-Uhlenbeck",
+    )
+    config: Optional[SensorSaturationConfig] = Field(
+        default=None,
+        description="Configuração customizada de saturação, ruído e nós (opcional)",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_saturation_aliases(cls, values: dict) -> dict:
+        if isinstance(values, dict):
+            if "vector_N_bruto" in values and "N_bruto" not in values:
+                values["N_bruto"] = values["vector_N_bruto"]
+            elif "N_bruto" in values and "vector_N_bruto" not in values:
+                values["vector_N_bruto"] = values["N_bruto"]
+
+            if "vector_N_propagado" in values and "N_propagado" not in values:
+                values["N_propagado"] = values["vector_N_propagado"]
+            elif "N_propagado" in values and "vector_N_propagado" not in values:
+                values["vector_N_propagado"] = values["N_propagado"]
+        return values
+
+
+class SensorTelemetryItem(BaseModel):
+    """Leitura emitida por um sensor individual compatível com Leaflet e GeoPackage."""
+    sensor_id: str
+    nome_local: str
+    count: int = Field(..., ge=0, description="Contagem inteira discretizada emitida N_j^sensor")
+    max_capacity: int = Field(..., ge=0, description="Capacidade máxima de suporte N_j,max")
+    occupancy_pct: float = Field(..., ge=0.0, description="Taxa percentual de ocupação em % (0..100)")
+    density_m2: float = Field(..., ge=0.0, description="Densidade estimada em pessoas / m²")
+    status: str = Field(..., description="Status de aglomeração: NORMAL, ATENCAO (>70%) ou CRITICO (>90%)")
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    raw_input: Optional[float] = Field(None, description="Volume físico bruto não atenuado N_bruto,j")
+    saturated_val: Optional[float] = Field(None, description="Valor contínuo saturado Richards S_j")
+    noise_val: Optional[float] = Field(None, description="Perturbação instrumental injetada epsilon_j")
+
+
+class SensorTelemetryResponse(BaseModel):
+    """Payload consolidado de telemetria IoT emitido para o Datalake e Mapa Leaflet (RF05)."""
+    timestamp_iso: str = Field(default_factory=lambda: datetime.now().isoformat())
+    current_time_hours: float
+    noise_method: str
+    step_minutes: float = Field(default=5.0)
+    vector_N_bruto: List[float] = Field(
+        ...,
+        description="Vetor de entrada de fluxo físico bruto N_bruto(t+1)",
+    )
+    vector_S_richards: List[float] = Field(
+        ...,
+        description="Vetor de fluxo saturado contínuo após a barreira de Richards S(t+1)",
+    )
+    vector_epsilon_noise: List[float] = Field(
+        ...,
+        description="Vetor de ruído instrumental estocástico injetado epsilon(t)",
+    )
+    vector_N_sensor: List[int] = Field(
+        ...,
+        description="Vetor final de leituras discretas emitidas pelo sensoriamento N_sensor(t+1)",
+    )
+    sensors: List[SensorTelemetryItem] = Field(
+        ...,
+        description="Lista detalhada por sensor para consumo no frontend Leaflet e QGIS",
+    )
+    persisted_rows: int = Field(
+        default=0,
+        description="Quantidade de registros persistidos na tabela telemetria_sensores",
+    )
+
 
 
