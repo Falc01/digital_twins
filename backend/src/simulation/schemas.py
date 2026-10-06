@@ -7,10 +7,48 @@ rotas da API FastAPI e barramento de dados sintéticos do Pelourinho.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
+
+DEFAULT_SENSOR_ID_TO_INDEX = {
+    "sensor_elevador_lacerda": 0,
+    "elevador_lacerda": 0,
+    "sensor_praca_da_se": 1,
+    "praca_da_se": 1,
+    "sensor_ladeira_do_carmo": 2,
+    "ladeira_do_carmo": 2,
+    "sensor_largo_pelourinho": 3,
+    "largo_pelourinho": 3,
+    "sensor_terreiro_jesus": 4,
+    "terreiro_jesus": 4,
+    "sensor_igreja_rosario": 2,
+    "igreja_rosario": 2,
+    "sensor_rosario_dos_pretos": 2,
+    "rosario_dos_pretos": 2,
+}
+
+
+def resolve_sensor_index(value: Any) -> Optional[int]:
+    """Resolve um identificador textual de sensor para o índice numérico correspondente."""
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        raw_text = value.strip()
+        if not raw_text:
+            return None
+        if raw_text.isdigit():
+            return int(raw_text)
+
+        normalized = re.sub(r"[^a-z0-9]+", "_", raw_text.lower()).strip("_")
+        if normalized in DEFAULT_SENSOR_ID_TO_INDEX:
+            return DEFAULT_SENSOR_ID_TO_INDEX[normalized]
+        return DEFAULT_SENSOR_ID_TO_INDEX.get(normalized.replace("sensor_", ""))
+    return None
 
 
 class SensorGateWeight(BaseModel):
@@ -425,7 +463,7 @@ class EventRule(BaseModel):
     Especificação de Evento Cultural / Espectáculo (Modo 1 e Modo 2).
     """
     event_id: str = Field(..., description="Identificador único do evento ou regra de calendário")
-    sensor_index: int = Field(..., ge=0, description="Índice do nó/sensor afetado na matriz (0..J-1)")
+    sensor_index: Optional[int] = Field(None, ge=0, description="Índice do nó/sensor afetado na matriz (0..J-1)")
     sensor_alvo: Optional[str] = Field(None, description="ID do sensor ou nome do local (opcional)")
     peak_hour: float = Field(..., ge=0.0, lt=24.0, description="Horário tau_jm de pico máximo em horas fracionárias")
     duration_hours: float = Field(..., gt=0.0, description="Largura/dispersão temporal sigma_jm em horas")
@@ -447,7 +485,21 @@ class EventRule(BaseModel):
                 values["sensor_alvo"] = values["sensor_id"]
             if "dia_semana" in values and "day_of_week" not in values:
                 values["day_of_week"] = values["dia_semana"]
+            if "sensor_index" in values and isinstance(values["sensor_index"], str):
+                values["sensor_index"] = resolve_sensor_index(values["sensor_index"])
         return values
+
+    @model_validator(mode="after")
+    def resolve_sensor_alias(self) -> "EventRule":
+        if self.sensor_index is None:
+            sensor_ref = self.sensor_alvo
+            if sensor_ref is None:
+                raise ValueError("Evento precisa de sensor_index ou sensor_alvo/sensor_id válido.")
+            resolved_index = resolve_sensor_index(sensor_ref)
+            if resolved_index is None:
+                raise ValueError(f"sensor_alvo '{sensor_ref}' não corresponde a um sensor conhecido do Pelourinho.")
+            self.sensor_index = resolved_index
+        return self
 
 
 class EventsInjectionConfig(BaseModel):

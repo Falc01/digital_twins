@@ -220,6 +220,64 @@ def test_nodal_vector_output_format():
     assert np.all(E_vec >= 0.0)
 
 
+def test_mode1_keeps_calendar_base_rules_when_custom_events_are_injected():
+    """Regressão: o calendário base deve permanecer ativo quando um evento pontual entra no registro."""
+    sim = EventsInjectionSimulator(
+        config=EventsInjectionConfig(enable_mode1=True, enable_mode2=True, enable_mode3=False)
+    )
+    custom_event = EventRule(
+        event_id="show_especial_pelourinho",
+        sensor_alvo="sensor_largo_pelourinho",
+        peak_hour=19.0,
+        duration_hours=1.0,
+        magnitude=100.0,
+        is_recurring=False,
+    )
+
+    resp = sim.evaluate(
+        current_time_hours=20.0,
+        day_of_week=1,
+        node_capacities=[150, 120, 80, 200],
+        events_registry=[custom_event],
+    )
+
+    assert len(resp.active_events) >= 2
+    assert resp.vector_E_eventos[3] > 0.0
+
+
+def test_event_rule_accepts_sensor_alias_and_maps_to_sensor_index():
+    """Eventos podem ser cadastrados por sensor_id/sensor_alvo sem precisar conhecer o índice numérico."""
+    rule = EventRule(
+        event_id="evento_nomeado",
+        sensor_alvo="sensor_largo_pelourinho",
+        peak_hour=18.0,
+        duration_hours=1.0,
+        magnitude=80.0,
+    )
+
+    assert rule.sensor_index == 3
+    assert rule.sensor_alvo == "sensor_largo_pelourinho"
+
+
+def test_mode3_keeps_spontaneous_events_alive_across_cycles():
+    """Eventos aleatórios espontâneos devem persistir em memória e decair suavemente ao longo do tempo."""
+    sim = EventsInjectionSimulator(
+        config=EventsInjectionConfig(
+            enable_mode1=False,
+            enable_mode2=False,
+            enable_mode3=True,
+            monte_carlo_prob=1.0,
+        )
+    )
+
+    first = sim.evaluate(current_time_hours=16.0, seed=42)
+    second = sim.evaluate(current_time_hours=16.5, seed=42)
+
+    assert sum(first.vector_E_eventos) > 0.0
+    assert sum(second.vector_E_eventos) > 0.0
+    assert len(sim._spontaneous_events) >= 1
+
+
 def test_performance_rnf01():
     """
     RNF01: Testa a complexidade temporal e tempo de resposta da avaliação (< 20 us por chamada).

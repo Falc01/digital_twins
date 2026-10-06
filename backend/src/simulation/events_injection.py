@@ -137,6 +137,7 @@ class EventsInjectionSimulator:
 
         self._calendar_rules: List[EventRule] = self._load_calendar_rules()
         self._agenda_events: List[EventRule] = self._load_agenda_events()
+        self._spontaneous_events: List[Dict[str, Any]] = []
 
     def _load_calendar_rules(self) -> List[EventRule]:
         """Carrega regras do Modo 1 (Calendário Cultural Fixo) de arquivo JSON se existir."""
@@ -212,16 +213,16 @@ class EventsInjectionSimulator:
         # MODO 1: Calendário Cultural Fixo (Recorrente por Dia da Semana)
         # ======================================================================
         if self.config.enable_mode1:
-            calendar_sources = (
-                [e for e in events_registry if e.is_recurring or e.day_of_week is not None]
-                if events_registry is not None
-                else self._calendar_rules
-            )
-            for rule in calendar_sources:
+            base_rules = list(self._calendar_rules)
+            if events_registry is not None:
+                base_rules.extend(
+                    [e for e in events_registry if e.is_recurring or e.day_of_week is not None]
+                )
+            for rule in base_rules:
                 if rule.day_of_week is not None and rule.day_of_week != day_of_week:
                     continue
 
-                j = rule.sensor_index
+                j = int(rule.sensor_index)
                 if 0 <= j < J:
                     calibrated_A = clip_event_magnitude(
                         magnitude=rule.magnitude,
@@ -254,13 +255,13 @@ class EventsInjectionSimulator:
         # MODO 2: Agenda de Eventos Pontuais (JSON / GeoPackage)
         # ======================================================================
         if self.config.enable_mode2:
-            agenda_sources = (
-                [e for e in events_registry if not e.is_recurring and e.day_of_week is None]
-                if events_registry is not None
-                else self._agenda_events
-            )
-            for event in agenda_sources:
-                j = event.sensor_index
+            base_agenda = list(self._agenda_events)
+            if events_registry is not None:
+                base_agenda.extend(
+                    [e for e in events_registry if (not e.is_recurring) and (e.day_of_week is None)]
+                )
+            for event in base_agenda:
+                j = int(event.sensor_index)
                 if 0 <= j < J:
                     calibrated_A = clip_event_magnitude(
                         magnitude=event.magnitude,
@@ -292,25 +293,19 @@ class EventsInjectionSimulator:
         # ======================================================================
         # MODO 3: Monte Carlo Estocástico Espontâneo (Pelourinho Afternoon)
         # ======================================================================
-        if self.config.enable_mode3 and (14.0 <= t_hours <= 18.0):
-            rng = np.random.default_rng(seed)
-            u = rng.random()
-            if u <= self.config.monte_carlo_prob:
-                target_j = int(rng.integers(0, J))
-                raw_A = float(rng.normal(35.0, 10.0))
-                duration = float(rng.uniform(0.5, 1.2))
+        self._spontaneous_events = [
+            event for event in self._spontaneous_events
+            if abs(t_hours - event["peak_hour"]) <= 3.0 * event["duration_hours"]
+        ]
 
-                calibrated_A = clip_event_magnitude(
-                    magnitude=max(5.0, raw_A),
-                    node_capacity=caps[target_j],
-                    min_ratio=self.config.min_capacity_ratio,
-                    max_ratio=self.config.max_capacity_ratio,
-                )
+        for spontaneous_event in self._spontaneous_events:
+            target_j = int(spontaneous_event["sensor_index"])
+            if 0 <= target_j < J:
                 pulse = calculate_gaussian_pulse(
                     current_time_hours=t_hours,
-                    peak_hour=t_hours,  # pico instantâneo da atração de rua
-                    duration_hours=duration,
-                    magnitude=calibrated_A,
+                    peak_hour=spontaneous_event["peak_hour"],
+                    duration_hours=spontaneous_event["duration_hours"],
+                    magnitude=spontaneous_event["magnitude"],
                 )
                 if pulse > 0.001:
                     vector_E[target_j] += pulse
@@ -318,14 +313,63 @@ class EventsInjectionSimulator:
                     active_events_list.append(
                         {
                             "mode": "Mode 3 (Monte Carlo)",
-                            "event_id": f"mc_spontaneous_node_{target_j}",
+                            "event_id": spontaneous_event["event_id"],
                             "sensor_index": target_j,
                             "pulse_value": round(pulse, 4),
-                            "calibrated_magnitude": round(calibrated_A, 2),
-                            "peak_hour": t_hours,
-                            "duration_hours": round(duration, 2),
+                            "calibrated_magnitude": round(spontaneous_event["magnitude"], 2),
+                            "peak_hour": spontaneous_event["peak_hour"],
+                            "duration_hours": spontaneous_event["duration_hours"],
                         }
                     )
+
+        if self.config.enable_mode3 and (14.0 <= t_hours <= 18.0):
+            active_now = any(
+                abs(t_hours - event["peak_hour"]) <= 3.0 * event["duration_hours"]
+                for event in self._spontaneous_events
+            )
+            if not active_now:
+                rng = np.random.default_rng(seed)
+                u = rng.random()
+                if u <= self.config.monte_carlo_prob:
+                    target_j = int(rng.integers(0, J))
+                    raw_A = float(rng.normal(35.0, 10.0))
+                    duration = float(rng.uniform(0.5, 1.2))
+
+                    calibrated_A = clip_event_magnitude(
+                        magnitude=max(5.0, raw_A),
+                        node_capacity=caps[target_j],
+                        min_ratio=self.config.min_capacity_ratio,
+                        max_ratio=self.config.max_capacity_ratio,
+                    )
+                    event = {
+                        "event_id": f"mc_spontaneous_node_{target_j}_{len(self._spontaneous_events)}",
+                        "sensor_index": target_j,
+                        "peak_hour": t_hours,
+                        "duration_hours": duration,
+                        "magnitude": calibrated_A,
+                    }
+                    self._spontaneous_events.append(event)
+
+                    pulse = calculate_gaussian_pulse(
+                        current_time_hours=t_hours,
+                        peak_hour=t_hours,
+                        duration_hours=duration,
+                        magnitude=calibrated_A,
+                    )
+                    if pulse > 0.001:
+                        vector_E[target_j] += pulse
+                        node_active_counts[target_j] += 1
+                        active_events_list.append(
+                            {
+                                "mode": "Mode 3 (Monte Carlo)",
+                                "event_id": event["event_id"],
+                                "sensor_index": target_j,
+                                "pulse_value": round(pulse, 4),
+                                "calibrated_magnitude": round(calibrated_A, 2),
+                                "peak_hour": t_hours,
+                                "duration_hours": round(duration, 2),
+                            }
+                        )
 
         # Prepara bônus detalhado nó a nó
         node_bonuses = [
