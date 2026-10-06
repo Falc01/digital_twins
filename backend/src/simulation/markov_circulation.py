@@ -28,6 +28,7 @@ from src.simulation.macro_flow import (
     current_system_hour,
     calculate_macro_flow,
 )
+from src.simulation.events_injection import calculate_events_injection
 
 logger = logging.getLogger("simulation.markov_circulation")
 
@@ -119,32 +120,67 @@ def evaluate_hourly_attraction(
     return alphas
 
 
+def calculate_gate_egress_probability(
+    current_time_hours: float,
+    base_rate: float = 0.08,
+    step_minutes: float = 5.0,
+) -> float:
+    """
+    Calcula a probabilidade instantânea de saída (egress) através de um nó de portão (GATE).
+    
+    A curva circadiana de saída é baixa pela manhã/início da tarde (quando o fluxo é
+    predominantemente de entrada) e sobe no final da tarde e noite (17h às 23h),
+    modelando a dispersão de volta para hotéis, residências e terminais.
+    
+    Formula:
+        M_egress(h) = 1.0 / (1.0 + exp(-0.6 * (h - 17.5)))
+        p_exit = base_rate * (0.2 + 0.8 * M_egress(h)) * (step_minutes / 5.0)
+    """
+    h = calculate_circadian_hour(current_time_hours)
+    diff = h - 17.5
+    exp_val = -0.6 * diff
+    if exp_val > 40.0:
+        sigmoid = 0.0
+    elif exp_val < -40.0:
+        sigmoid = 1.0
+    else:
+        sigmoid = 1.0 / (1.0 + math.exp(exp_val))
+        
+    modulation = 0.2 + 0.8 * sigmoid
+    rate = base_rate * modulation * (step_minutes / 5.0)
+    return float(np.clip(rate, 0.0, 0.85))
+
+
 def compute_markov_matrix(
     dist_matrix: np.ndarray,
     alpha_vector: Sequence[float],
     lambda_decay: float = 0.015,
     retention_bias: float = 1.0,
+    step_minutes: float = 5.0,
+    dwell_time_minutes: float = 20.0,
+    use_inertia: bool = False,
+    egress_rates: Optional[Sequence[float]] = None,
 ) -> np.ndarray:
     """
     Computa a Matriz Estocástica de Transição de Markov P(t) de dimensão J x J (RF01, RF03, RF04).
     
-    Formula:
-        Numerador_ij = alpha_j(t) * exp( -lambda_d * d_ij )
-        Numerador_ii = Numerador_ii * retention_bias
-        Denominador_i = sum_k Numerador_ik
-        P_ij = Numerador_ij / Denominador_i
-        
-    Propriedade Estocástica Rigorosa:
-        sum_j P_ij = 1.0 para todo i (linha unitária).
+    Suporta:
+    - Gravidade Espacial de Huff: Numerador_ij = alpha_j(t) * exp(-lambda_d * d_ij);
+    - Inércia Temporal Convexo: rho = exp(-dt / tau_dwell);
+    - Cadeia de Markov Aberta com Egress: P_ij = (1 - p_exit,i) * P_ij_interno.
         
     Args:
         dist_matrix: Matriz (J, J) de distâncias euclidianas em metros.
         alpha_vector: Vetor (J,) de atratividade instantânea dos POIs.
         lambda_decay: Taxa de atrito espacial lambda_d (padrão 0.015 m^-1).
         retention_bias: Fator multiplicativo de permanência no mesmo nó.
+        step_minutes: Passo temporal da simulação dt em minutos.
+        dwell_time_minutes: Tempo médio de permanência tau_dwell para inércia.
+        use_inertia: Ativar inércia de permanência temporal.
+        egress_rates: Vetor opcional (J,) com probabilidade de saída de cada nó (GATE).
         
     Returns:
-        np.ndarray: Matriz (J, J) float64 estocástica de probabilidades.
+        np.ndarray: Matriz (J, J) float64 de probabilidades de transição.
     """
     d_mat = np.asarray(dist_matrix, dtype=np.float64)
     alphas = np.asarray(alpha_vector, dtype=np.float64)
@@ -160,7 +196,6 @@ def compute_markov_matrix(
         raise ValueError("A taxa de decaimento lambda_decay deve ser estritamente positiva.")
 
     # Numerador gravitacional vetorizado: broadcast de alpha_j sobre a exponencial de distâncias
-    # dist_matrix tem shape (J, J); alphas tem shape (J,) -> alphas atua como coluna de destino j
     spatial_decay = np.exp(-lambda_decay * d_mat)
     numerator = alphas[np.newaxis, :] * spatial_decay
     
@@ -172,6 +207,21 @@ def compute_markov_matrix(
     denominators = np.sum(numerator, axis=1, keepdims=True)
     denominators = np.where(denominators <= 0.0, 1.0, denominators)
     p_matrix = numerator / denominators
+
+    # Inércia temporal baseada no tempo médio de permanência e granularidade Δt
+    if use_inertia and dwell_time_minutes > 0.0 and step_minutes > 0.0:
+        rho = math.exp(-step_minutes / dwell_time_minutes)
+        p_inertial = (1.0 - rho) * p_matrix
+        np.fill_diagonal(p_inertial, np.diag(p_inertial) + rho)
+        p_matrix = p_inertial
+
+    # Cadeia de Markov aberta: aplica taxas de egress nos nós de portão
+    if egress_rates is not None:
+        egress_arr = np.asarray(egress_rates, dtype=np.float64)
+        if len(egress_arr) == j_nodes:
+            survival = np.clip(1.0 - egress_arr, 0.0, 1.0)[:, np.newaxis]
+            p_matrix = p_matrix * survival
+
     return p_matrix
 
 
@@ -186,12 +236,9 @@ def propagate_flow(
         N_propagado(t+1) = P(t)^T * N(t)
         N_j,propagado(t+1) = sum_i P_ij(t) * N_i(t)
         
-    Conservação de Pedestres:
-        sum_j N_j,propagado(t+1) == sum_i N_i(t)
-        
     Args:
         current_N: Vetor (J,) de pedestres no ciclo atual.
-        transition_matrix: Matriz estocástica P(t) de dimensão (J, J).
+        transition_matrix: Matriz P(t) de dimensão (J, J).
         
     Returns:
         np.ndarray: Vetor (J,) float64 com a contagem redistribuída em indivíduos.
@@ -208,7 +255,6 @@ def propagate_flow(
         )
         
     # Álgebra linear: N_propagado = P^T * N_atual
-    # No NumPy, p_mat.T @ n_vec equivale a dot(p_mat.T, n_vec)
     n_propagado = np.dot(p_mat.T, n_vec)
     return n_propagado
 
@@ -218,7 +264,8 @@ class MarkovCirculationSimulator:
     Simulador de Circulação de Rede via Cadeias de Markov & POIs (Doc 03).
     
     Gerencia a topologia dos sensores, o cálculo de distâncias geográficas,
-    a matriz de transição dinâmica e a redistribuição contínua de pedestres.
+    a matriz de transição dinâmica, a inércia temporal, egress nos portões
+    e a redistribuição contínua de pedestres.
     """
 
     def __init__(self, config: Optional[MarkovCirculationConfig] = None) -> None:
@@ -238,6 +285,9 @@ class MarkovCirculationSimulator:
         self,
         t_hours: Optional[float] = None,
         alpha_override: Optional[Sequence[float]] = None,
+        step_minutes: Optional[float] = None,
+        enable_egress: Optional[bool] = None,
+        use_inertia: Optional[bool] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calcula a matriz estocástica P(t) e o vetor de atratividades alpha(t) para o horário dado.
@@ -247,6 +297,10 @@ class MarkovCirculationSimulator:
         """
         if t_hours is None:
             t_hours = current_system_hour()
+            
+        dt = step_minutes if step_minutes is not None else self.config.step_minutes
+        egress_on = enable_egress if enable_egress is not None else self.config.enable_egress
+        inertia_on = use_inertia if use_inertia is not None else self.config.use_inertia
             
         if alpha_override is not None:
             alphas = np.asarray(alpha_override, dtype=np.float64)
@@ -261,11 +315,23 @@ class MarkovCirculationSimulator:
                 poi_types=self.poi_types,
             )
             
+        egress_rates = None
+        if egress_on:
+            egress_rates = [
+                calculate_gate_egress_probability(t_hours, self.config.base_egress_rate, dt)
+                if p_type.upper() == "GATE" else 0.0
+                for p_type in self.poi_types
+            ]
+            
         p_matrix = compute_markov_matrix(
             dist_matrix=self.distance_matrix,
             alpha_vector=alphas,
             lambda_decay=self.config.lambda_decay,
             retention_bias=self.config.retention_bias,
+            step_minutes=dt,
+            dwell_time_minutes=self.config.dwell_time_minutes,
+            use_inertia=inertia_on,
+            egress_rates=egress_rates,
         )
         return p_matrix, alphas
 
@@ -275,6 +341,12 @@ class MarkovCirculationSimulator:
         t_hours: Optional[float] = None,
         gamma: float = 1.0,
         alpha_override: Optional[Sequence[float]] = None,
+        step_minutes: Optional[float] = None,
+        enable_egress: Optional[bool] = None,
+        use_inertia: Optional[bool] = None,
+        include_raw_flow: bool = False,
+        delta_N_rotina: Optional[Sequence[float]] = None,
+        vector_E_eventos: Optional[Sequence[float]] = None,
     ) -> MarkovCirculationResponse:
         """
         Executa um ciclo completo de redistribuição de pedestres por Markov (Doc 03).
@@ -286,12 +358,22 @@ class MarkovCirculationSimulator:
             t_hours: Instante contínuo t em horas. Se None, lê relógio operacional.
             gamma: Multiplicador sazonal da época.
             alpha_override: Vetor opcional de atratividades customizadas.
+            step_minutes: Duração do ciclo temporal em minutos.
+            enable_egress: Habilitar cadeia aberta com saída nos portões.
+            use_inertia: Habilitar inércia de permanência temporal.
+            include_raw_flow: Compor N_bruto(t+1) com novos ingressos e eventos para o Doc 04.
+            delta_N_rotina: Influxo diferencial dos portões (Doc 01).
+            vector_E_eventos: Pulsos de eventos nodais (Doc 02).
             
         Returns:
-            MarkovCirculationResponse: Payload com N_propagado, matriz P e fluxos nodais.
+            MarkovCirculationResponse: Payload com N_propagado, matriz P, fluxos nodais e N_bruto.
         """
         if t_hours is None:
             t_hours = current_system_hour()
+            
+        dt = step_minutes if step_minutes is not None else self.config.step_minutes
+        egress_on = enable_egress if enable_egress is not None else self.config.enable_egress
+        inertia_on = use_inertia if use_inertia is not None else self.config.use_inertia
             
         h = calculate_circadian_hour(t_hours)
         j_nodes = len(self.sensor_ids)
@@ -301,9 +383,9 @@ class MarkovCirculationSimulator:
             macro_res = calculate_macro_flow(
                 current_time_hours=t_hours,
                 gamma_seasonality=gamma,
+                step_minutes=dt,
             )
             raw_n = macro_res.vector_N_rotina
-            # Ajusta tamanho se a malha de Markov tiver nós internos sem entrada física
             if len(raw_n) < j_nodes:
                 n_init = np.pad(raw_n, (0, j_nodes - len(raw_n)), "constant", constant_values=0.0)
             else:
@@ -315,14 +397,22 @@ class MarkovCirculationSimulator:
                     f"Vetor de estado N deve ter tamanho {j_nodes} (fornecido: {len(n_init)})."
                 )
 
-        # Avalia matriz estocástica P(t) e atratores
+        # Avalia matriz P(t) e atratores
         p_matrix, alphas = self.evaluate_transition_matrix(
             t_hours=t_hours,
             alpha_override=alpha_override,
+            step_minutes=dt,
+            enable_egress=egress_on,
+            use_inertia=inertia_on,
         )
         
         # Propagação matricial: N_propagado = P^T * N_inicial
         n_propagated = propagate_flow(n_init, p_matrix)
+        
+        # Cálculo de egress (pedestres que deixam o bairro pelos portões)
+        row_sums = np.sum(p_matrix, axis=1)
+        egress_fractions = np.maximum(0.0, 1.0 - row_sums)
+        n_egress = n_init * egress_fractions
         
         # Detalhamento de fluxos por nó para auditoria urbana
         node_flows: List[MarkovNodeFlow] = []
@@ -330,9 +420,10 @@ class MarkovCirculationSimulator:
             init_val = float(n_init[idx])
             p_ii = float(p_matrix[idx, idx])
             retained = init_val * p_ii
-            outflow = init_val - retained
+            egress_val = float(n_egress[idx])
+            outflow = max(0.0, init_val - retained - egress_val)
             final_val = float(n_propagated[idx])
-            inflow = final_val - retained
+            inflow = max(0.0, final_val - retained)
             
             node_flows.append(
                 MarkovNodeFlow(
@@ -343,22 +434,68 @@ class MarkovCirculationSimulator:
                     retained_pedestrians=round(retained, 2),
                     inflow_pedestrians=round(max(0.0, inflow), 2),
                     outflow_pedestrians=round(max(0.0, outflow), 2),
+                    egress_pedestrians=round(egress_val, 2),
                     final_propagated_pedestrians=round(final_val, 2),
                 )
             )
             
         tot_ini = float(np.sum(n_init))
         tot_prop = float(np.sum(n_propagated))
-        cons_err = abs(tot_prop - tot_ini)
+        tot_egress = float(np.sum(n_egress))
+        cons_err = abs((tot_prop + tot_egress) - tot_ini)
         
+        # Orquestração do Fluxo Físico Bruto N_bruto(t+1) para o Doc 04
+        vector_N_bruto_out = None
+        if include_raw_flow:
+            # 1. Taxa incremental do Doc 01
+            if delta_N_rotina is not None:
+                d_rot = np.asarray(delta_N_rotina, dtype=np.float64)
+            else:
+                macro_dt = calculate_macro_flow(
+                    current_time_hours=t_hours,
+                    gamma_seasonality=gamma,
+                    step_minutes=dt,
+                    use_incremental=True,
+                )
+                raw_d = macro_dt.delta_N_rotina if macro_dt.delta_N_rotina else macro_dt.vector_N_rotina
+                d_rot = np.asarray(raw_d, dtype=np.float64)
+            if len(d_rot) < j_nodes:
+                d_rot = np.pad(d_rot, (0, j_nodes - len(d_rot)), "constant", constant_values=0.0)
+            else:
+                d_rot = d_rot[:j_nodes]
+
+            # 2. Pulsos de eventos do Doc 02
+            if vector_E_eventos is not None:
+                e_vec = np.asarray(vector_E_eventos, dtype=np.float64)
+            else:
+                caps = [node.max_capacity for node in self.config.nodes]
+                e_vec = calculate_events_injection(
+                    current_time_hours=t_hours,
+                    day_of_week=None,
+                    node_capacities=caps,
+                )
+            if len(e_vec) < j_nodes:
+                e_vec = np.pad(e_vec, (0, j_nodes - len(e_vec)), "constant", constant_values=0.0)
+            else:
+                e_vec = e_vec[:j_nodes]
+
+            # 3. Composição física bruta: N_bruto = N_propagado + delta_N + E
+            n_bruto = n_propagated + d_rot + e_vec
+            vector_N_bruto_out = [round(float(v), 2) for v in n_bruto.tolist()]
+
         return MarkovCirculationResponse(
             timestamp_iso=datetime.now().isoformat(),
             current_time_hours=t_hours,
             circadian_hour=round(h, 4),
             gamma_seasonality=gamma,
+            step_minutes=round(dt, 2),
+            egress_enabled=bool(egress_on),
             total_initial_pedestrians=round(tot_ini, 2),
             total_propagated_pedestrians=round(tot_prop, 2),
+            total_egress_pedestrians=round(tot_egress, 2),
             vector_N_propagado=[round(v, 2) for v in n_propagated.tolist()],
+            vector_N_egress=[round(v, 2) for v in n_egress.tolist()],
+            vector_N_bruto=vector_N_bruto_out,
             transition_matrix=[[round(float(p), 4) for p in row] for row in p_matrix.tolist()],
             attraction_vector=[round(float(a), 3) for a in alphas.tolist()],
             node_flows=node_flows,
@@ -373,6 +510,12 @@ def propagate_markov_flow(
     gamma_seasonality: float = 1.0,
     config: Optional[MarkovCirculationConfig] = None,
     alpha_override: Optional[Sequence[float]] = None,
+    step_minutes: Optional[float] = None,
+    enable_egress: Optional[bool] = None,
+    use_inertia: Optional[bool] = None,
+    include_raw_flow: bool = False,
+    delta_N_rotina: Optional[Sequence[float]] = None,
+    vector_E_eventos: Optional[Sequence[float]] = None,
 ) -> MarkovCirculationResponse:
     """
     Função principal do Subsistema de Circulação de Markov (Doc 03).
@@ -384,4 +527,10 @@ def propagate_markov_flow(
         t_hours=current_time_hours,
         gamma=gamma_seasonality,
         alpha_override=alpha_override,
+        step_minutes=step_minutes,
+        enable_egress=enable_egress,
+        use_inertia=use_inertia,
+        include_raw_flow=include_raw_flow,
+        delta_N_rotina=delta_N_rotina,
+        vector_E_eventos=vector_E_eventos,
     )

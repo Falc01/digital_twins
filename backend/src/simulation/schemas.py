@@ -312,6 +312,30 @@ class MarkovCirculationConfig(BaseModel):
         gt=0.0,
         description="Viés basal de permanência no mesmo nó (termo diagonal P_ii)",
     )
+    step_minutes: float = Field(
+        default=5.0,
+        gt=0.0,
+        description="Duração do ciclo/passo temporal de simulação Δt em minutos",
+    )
+    dwell_time_minutes: float = Field(
+        default=20.0,
+        gt=0.0,
+        description="Tempo médio estimado de permanência τ_dwell em um logradouro para modelagem de inércia",
+    )
+    use_inertia: bool = Field(
+        default=False,
+        description="Ativa inércia temporal de retenção via combinação convexa ρ(Δt) com a matriz gravitacional",
+    )
+    enable_egress: bool = Field(
+        default=False,
+        description="Habilita cadeia de Markov aberta com probabilidade de egress (saída do bairro) nos portões",
+    )
+    base_egress_rate: float = Field(
+        default=0.08,
+        ge=0.0,
+        le=1.0,
+        description="Taxa basal horária de dispersão/saída do Pelourinho nos nós do tipo GATE",
+    )
     category_attractions: dict[str, float] = Field(
         default_factory=lambda: {
             "GATE": 1.0,
@@ -402,6 +426,31 @@ class MarkovCirculationRequest(BaseModel):
         ge=0.0,
         description="Multiplicador sazonal da época",
     )
+    step_minutes: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Passo temporal da simulação Δt em minutos (se omitido, usa config)",
+    )
+    enable_egress: Optional[bool] = Field(
+        default=None,
+        description="Habilitar probabilidade de saída do bairro pelos portões (Cadeia Aberta)",
+    )
+    use_inertia: Optional[bool] = Field(
+        default=None,
+        description="Habilitar inércia de permanência temporal ρ(Δt)",
+    )
+    include_raw_flow: bool = Field(
+        default=False,
+        description="Compor automaticamente a Massa de Fluxo Físico Bruto N_bruto = N_prop + delta_N + E para o Doc 04",
+    )
+    delta_N_rotina: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor opcional de novos ingressos nos portões (Doc 01). Se omitido e include_raw_flow=True, calcula via Doc 01.",
+    )
+    vector_E_eventos: Optional[List[float]] = Field(
+        default=None,
+        description="Vetor opcional de pulsos de eventos (Doc 02). Se omitido e include_raw_flow=True, calcula via Doc 02.",
+    )
     config: Optional[MarkovCirculationConfig] = Field(
         default=None,
         description="Configuração personalizada de nós e distâncias (opcional)",
@@ -421,6 +470,7 @@ class MarkovNodeFlow(BaseModel):
     retained_pedestrians: float = Field(..., description="Pessoas que permaneceram no mesmo local (P_ii * N_i)")
     inflow_pedestrians: float = Field(..., description="Pessoas recebidas de outros sensores vizinhos")
     outflow_pedestrians: float = Field(..., description="Pessoas que migraram para outros sensores")
+    egress_pedestrians: float = Field(default=0.0, description="Pessoas que saíram do bairro por este nó (se GATE)")
     final_propagated_pedestrians: float = Field(..., description="Lotação propagada final N_j,propagado(t+1)")
 
 
@@ -432,15 +482,26 @@ class MarkovCirculationResponse(BaseModel):
     current_time_hours: float
     circadian_hour: float
     gamma_seasonality: float
+    step_minutes: float = Field(default=5.0, description="Passo temporal Δt considerado no ciclo em minutos")
+    egress_enabled: bool = Field(default=False, description="Indica se a taxa de egress nos portões esteve ativa")
     total_initial_pedestrians: float
     total_propagated_pedestrians: float
+    total_egress_pedestrians: float = Field(default=0.0, description="Total de pedestres que saíram do bairro neste ciclo")
     vector_N_propagado: List[float] = Field(
         ...,
         description="Vetor N_propagado(t+1) em indivíduos para transmissão direta ao barramento",
     )
+    vector_N_egress: List[float] = Field(
+        default_factory=list,
+        description="Vetor com quantidade de pessoas que saíram por cada portão neste ciclo",
+    )
+    vector_N_bruto: Optional[List[float]] = Field(
+        default=None,
+        description="Massa de Fluxo Físico Bruto N_bruto = N_propagado + delta_N_rotina + E_eventos pronta para o Doc 04",
+    )
     transition_matrix: List[List[float]] = Field(
         ...,
-        description="Matriz estocástica de transição P(t) de dimensão J x J (cada linha soma 1.0)",
+        description="Matriz estocástica de transição P(t) de dimensão J x J",
     )
     attraction_vector: List[float] = Field(
         ...,
@@ -450,7 +511,7 @@ class MarkovCirculationResponse(BaseModel):
     sensor_ids: List[str]
     conservation_error: float = Field(
         default=0.0,
-        description="Erro absoluto de conservação |sum(N_prop) - sum(N_ini)|",
+        description="Erro absoluto de balanço |(N_prop + N_egress) - N_ini|",
     )
 
 

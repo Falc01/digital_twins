@@ -267,3 +267,101 @@ def test_api_post_markov_propagate():
     assert pytest.approx(data["total_propagated_pedestrians"]) == 300.0
     assert len(data["vector_N_propagado"]) == 5
     assert len(data["node_flows"]) == 5
+
+
+# ==============================================================================
+# 7. Testes de Inércia Temporal, Cadeia Aberta (Egress) e Integração N_bruto
+# ==============================================================================
+
+def test_temporal_inertia_and_step_minutes():
+    """Testa se passos curtos (dt=1 min) aumentam a retenção diagonal P_ii em relação a passos longos."""
+    dist_mat = np.array([
+        [0.0, 100.0],
+        [100.0, 0.0],
+    ])
+    alphas = [1.0, 1.0]
+
+    p_short = compute_markov_matrix(
+        dist_mat, alphas, step_minutes=1.0, dwell_time_minutes=20.0, use_inertia=True
+    )
+    p_long = compute_markov_matrix(
+        dist_mat, alphas, step_minutes=15.0, dwell_time_minutes=20.0, use_inertia=True
+    )
+
+    # Com dt menor, a inércia rho é maior, logo a permanência P_ii é maior
+    assert p_short[0, 0] > p_long[0, 0]
+    # Ambos mantêm linhas somando 1.0
+    assert pytest.approx(sum(p_short[0]), abs=1e-5) == 1.0
+    assert pytest.approx(sum(p_long[0]), abs=1e-5) == 1.0
+
+
+def test_open_markov_chain_gate_egress():
+    """Testa conservação da cadeia aberta: N_propagado + N_egress == N_inicial."""
+    sim = MarkovCirculationSimulator()
+    state = [100.0, 80.0, 50.0, 150.0, 90.0]
+
+    res = sim.propagate(
+        current_state_N=state,
+        t_hours=19.0,  # Noite: alta taxa de dispersão nos portões
+        step_minutes=5.0,
+        enable_egress=True,
+    )
+
+    assert res.egress_enabled is True
+    assert res.total_egress_pedestrians > 0.0
+    # Portões de entrada (índices 0, 1, 2) devem ter egress > 0
+    assert res.vector_N_egress[0] > 0.0
+    assert res.vector_N_egress[1] > 0.0
+    # POIs internos (índices 3 e 4 - SHOW e IGREJA) têm egress == 0.0
+    assert res.vector_N_egress[3] == 0.0
+    assert res.vector_N_egress[4] == 0.0
+
+    # Balanço físico estrito de conservação
+    total_balance = res.total_propagated_pedestrians + res.total_egress_pedestrians
+    assert pytest.approx(total_balance, abs=1e-4) == res.total_initial_pedestrians
+    assert res.conservation_error < 1e-4
+
+
+def test_orchestrate_raw_physical_flow_for_doc04():
+    """Testa composição de N_bruto = N_propagado + delta_N_rotina + E_eventos."""
+    sim = MarkovCirculationSimulator()
+    state = [50.0, 40.0, 30.0, 80.0, 60.0]
+
+    res = sim.propagate(
+        current_state_N=state,
+        t_hours=16.5,
+        include_raw_flow=True,
+        delta_N_rotina=[10.0, 5.0, 2.0, 0.0, 0.0],
+        vector_E_eventos=[0.0, 0.0, 0.0, 45.0, 0.0],
+    )
+
+    assert res.vector_N_bruto is not None
+    assert len(res.vector_N_bruto) == 5
+
+    # Para o nó 3 (Largo do Pelourinho): N_bruto = N_prop[3] + 0.0 + 45.0
+    expected_node3 = res.vector_N_propagado[3] + 45.0
+    assert pytest.approx(res.vector_N_bruto[3], abs=0.05) == expected_node3
+
+    # Para o nó 0 (Elevador Lacerda): N_bruto = N_prop[0] + 10.0 + 0.0
+    expected_node0 = res.vector_N_propagado[0] + 10.0
+    assert pytest.approx(res.vector_N_bruto[0], abs=0.05) == expected_node0
+
+
+def test_api_markov_propagate_with_egress_and_raw_flow():
+    """Testa rota HTTP POST com egress e composição de N_bruto ativados."""
+    payload = {
+        "current_time_hours": 18.0,
+        "gamma_seasonality": 1.0,
+        "step_minutes": 5.0,
+        "enable_egress": True,
+        "include_raw_flow": True,
+        "current_state_N": [60.0, 50.0, 30.0, 100.0, 80.0],
+    }
+    res = client.post("/api/v1/simulation/markov/propagate", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["egress_enabled"] is True
+    assert data["total_egress_pedestrians"] > 0.0
+    assert data["vector_N_bruto"] is not None
+    assert len(data["vector_N_bruto"]) == 5
+    assert data["conservation_error"] < 1e-4

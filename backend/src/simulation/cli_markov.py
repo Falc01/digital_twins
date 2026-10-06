@@ -56,6 +56,29 @@ def main():
         help="Número de passos/ciclos sequenciais de propagação de Markov a simular.",
     )
     parser.add_argument(
+        "--dt",
+        "--step-minutes",
+        dest="step_minutes",
+        type=float,
+        default=5.0,
+        help="Duração do ciclo temporal de simulação Δt em minutos (padrão: 5.0).",
+    )
+    parser.add_argument(
+        "--egress",
+        action="store_true",
+        help="Ativa cadeia de Markov aberta com probabilidade de egress (saída do bairro) nos portões.",
+    )
+    parser.add_argument(
+        "--inertia",
+        action="store_true",
+        help="Ativa inércia temporal de retenção via combinação convexa ρ(Δt) com a matriz gravitacional.",
+    )
+    parser.add_argument(
+        "--bruto",
+        action="store_true",
+        help="Compõe automaticamente a Massa de Fluxo Físico Bruto N_bruto = N_prop + delta_N + E para o Doc 04.",
+    )
+    parser.add_argument(
         "--initial",
         type=str,
         default=None,
@@ -81,11 +104,18 @@ def main():
 
     # Exibição apenas da matriz de transição
     if args.matrix and args.steps <= 1 and not args.json:
-        p_mat, alphas = sim.evaluate_transition_matrix(t_hours=args.time)
+        p_mat, alphas = sim.evaluate_transition_matrix(
+            t_hours=args.time,
+            step_minutes=args.step_minutes,
+            enable_egress=args.egress,
+            use_inertia=args.inertia,
+        )
         print("\n🎲 Matriz Estocástica de Transição de Markov P(t) — Centro Histórico:")
         print("=" * 80)
         time_display = f"{args.time:.2f}h" if args.time is not None else "Hora do Sistema"
-        print(f"Horário de Avaliação: {time_display} | Taxa de Decaimento (λ_d): {sim.config.lambda_decay} m⁻¹")
+        mode_egress = "Aberta com Egress (Saída)" if args.egress else "Fechada (Conservativa 100%)"
+        print(f"Horário de Avaliação: {time_display} | Δt: {args.step_minutes} min | Modo: {mode_egress}")
+        print(f"Taxa de Decaimento (λ_d): {sim.config.lambda_decay} m⁻¹ | Inércia Temporal: {args.inertia}")
         print("-" * 80)
         header = f"{'Origem \\ Destino':<22} | " + " | ".join(f"{name[:10]:<10}" for name in sim.node_names) + " | Total Linha"
         print(header)
@@ -108,11 +138,15 @@ def main():
 
     current_t = args.time if args.time is not None else 16.5
     for step in range(1, args.steps + 1):
-        step_t = current_t + (step - 1) * (5.0 / 60.0)  # passo temporal padrão de 5 minutos
+        step_t = current_t + (step - 1) * (args.step_minutes / 60.0)
         res = sim.propagate(
             current_state_N=state,
             t_hours=step_t,
             gamma=args.gamma,
+            step_minutes=args.step_minutes,
+            enable_egress=args.egress,
+            use_inertia=args.inertia,
+            include_raw_flow=args.bruto,
         )
         last_res = res
         state = res.vector_N_propagado
@@ -120,6 +154,8 @@ def main():
             "step": step,
             "time_hours": round(step_t, 2),
             "state_propagated": res.vector_N_propagado,
+            "total_egress": res.total_egress_pedestrians,
+            "vector_N_bruto": res.vector_N_bruto,
         })
 
     if args.json:
@@ -132,15 +168,17 @@ def main():
 
     # Saída formatada em ASCII
     print("\n🌐 Gêmeo Digital IoT Pelourinho — Circulação de Markov (Doc 03)")
-    print("=" * 75)
+    print("=" * 80)
     print(f" Timestamp ISO             : {last_res.timestamp_iso}")
-    print(f" Hora Contínua t           : {last_res.current_time_hours:.2f}h")
+    print(f" Hora Contínua t           : {last_res.current_time_hours:.2f}h (Passo Δt = {last_res.step_minutes} min)")
     print(f" Total Inicial de Pessoas  : {last_res.total_initial_pedestrians:.1f} pessoas")
-    print(f" Total Propagado de Pessoas: {last_res.total_propagated_pedestrians:.1f} pessoas (Erro = {last_res.conservation_error:.6f})")
-    print("-" * 75)
+    print(f" Total Propagado de Pessoas: {last_res.total_propagated_pedestrians:.1f} pessoas")
+    if last_res.egress_enabled:
+        print(f" Egress (Saída nos Portões): {last_res.total_egress_pedestrians:.1f} pessoas (Balanço: Erro = {last_res.conservation_error:.6f})")
+    print("-" * 80)
     print(" Balanço de Fluxos por Nó Monitorado:")
-    print(f"{'Local':<22} | {'Inicial':<9} | {'Ficaram':<9} | {'Entraram':<9} | {'Saíram':<9} | {'Final':<9}")
-    print("-" * 75)
+    print(f"{'Local':<22} | {'Inicial':<9} | {'Ficaram':<9} | {'Entraram':<9} | {'Saíram':<9} | {'Egress':<8} | {'Final':<9}")
+    print("-" * 80)
     for flow in last_res.node_flows:
         print(
             f"{flow.nome_local[:22]:<22} | "
@@ -148,10 +186,13 @@ def main():
             f"{flow.retained_pedestrians:>7.1f}p | "
             f"{flow.inflow_pedestrians:>7.1f}p | "
             f"{flow.outflow_pedestrians:>7.1f}p | "
+            f"{flow.egress_pedestrians:>6.1f}p | "
             f"{flow.final_propagated_pedestrians:>7.1f}p"
         )
-    print("=" * 75)
-    print(f" Vetor N_propagado(t+1) para o Barramento: {last_res.vector_N_propagado}\n")
+    print("=" * 80)
+    print(f" Vetor N_propagado(t+1) para o Barramento: {last_res.vector_N_propagado}")
+    if last_res.vector_N_bruto:
+        print(f" Vetor N_bruto(t+1) (Integrado p/ Doc 04): {last_res.vector_N_bruto}\n")
 
 
 if __name__ == "__main__":

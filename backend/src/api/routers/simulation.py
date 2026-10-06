@@ -224,6 +224,12 @@ def propagate_markov_network(
             t_hours=payload.current_time_hours,
             gamma=payload.gamma_seasonality,
             alpha_override=payload.alpha_override,
+            step_minutes=payload.step_minutes,
+            enable_egress=payload.enable_egress,
+            use_inertia=payload.use_inertia,
+            include_raw_flow=payload.include_raw_flow,
+            delta_N_rotina=payload.delta_N_rotina,
+            vector_E_eventos=payload.vector_E_eventos,
         )
         return response
     except ValueError as e:
