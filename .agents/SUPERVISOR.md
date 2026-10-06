@@ -44,7 +44,9 @@ description: Supervisor Residente e PM Técnico do Projeto IC Gêmeos Digitais I
   Anexar EXCLUSIVAMENTE o bloco canônico padronizado de 4 linhas ao final de cada resposta substantiva (`atlas.token.telemetry.rule.md`). **É terminantemente proibido inventar frases soltas em itálico ou linhas avulsas como "*Telemetria Atlas: ~30k tokens investidos...*"**:
   ```markdown
   ---
-  🪙 **Telemetria de Tokens**: ~{X} tokens (turno) | ~{Y}k tokens (janela acumulada) | Persistência: English (Dense YAML)  
+  🪙 **Telemetria de Tokens**:
+    • 📥 **Entrada**: ~{X} tokens | 📤 **Saída**: ~{Y} tokens | ⏱️ **Latência**: ~{Z}s | 💵 **Custo Est.**: ~${W} USD  
+    • 📈 **Janela Acumulada**: ~{K}k tokens | Persistência: English (Dense YAML)  
   📊 **Janela de Contexto**:  
     • 💬 **Chat Atual**: [Turno {N}] {🟢 Leve (<25k tokens — seguro continuar) / 🟡 Atenção (25k-60k tokens — planeje fechamento) / 🔴 Saturado (>60k tokens — novo chat recomendado)}  
     • 📁 **Projeto (.agents)**: {🟢 Saudável (<15KB) / 🟡 Compactação pendente / 🔴 Memória pesada}
