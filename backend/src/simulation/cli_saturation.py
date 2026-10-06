@@ -89,6 +89,19 @@ def main():
         help="Intervalo em horas entre amostras ao simular o dia inteiro com --day (padrão: 2.0 h).",
     )
     parser.add_argument(
+        "--matrix",
+        action="store_true",
+        help="Exibe a Matriz Estocástica de Transição de Markov P(t) e os campos atratores.",
+    )
+    parser.add_argument(
+        "--weekday",
+        "--day-of-week",
+        type=int,
+        default=None,
+        choices=[0, 1, 2, 3, 4, 5, 6],
+        help="Dia da semana para eventos culturais (0=Segunda, 1=Terça, ..., 6=Domingo).",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Exibe a saída em formato JSON estrito para integração de scripts.",
@@ -135,6 +148,7 @@ def main():
                 step_minutes=args.step_minutes,
                 noise_method=args.method,
                 persist_telemetry=args.persist,
+                day_of_week=args.weekday,
             )
             timeline_results.append(resp)
 
@@ -199,6 +213,7 @@ def main():
         step_minutes=args.step_minutes,
         noise_method=args.method,
         persist_telemetry=args.persist,
+        day_of_week=args.weekday,
     )
 
     if args.json:
@@ -209,6 +224,26 @@ def main():
     t_h = response.current_time_hours
     hh = int(t_h)
     mm = int((t_h - hh) * 60)
+
+    if args.matrix:
+        from src.simulation.markov_circulation import MarkovCirculationSimulator
+        m_sim = MarkovCirculationSimulator()
+        p_mat, alphas = m_sim.evaluate_transition_matrix(t_hours=t_h)
+        print("\n🎲 MATRIZ ESTOCÁSTICA DE TRANSIÇÃO DE MARKOV P(t):")
+        print("=" * 82)
+        print(f"Horário Virtual: {hh:02d}h{mm:02d} ({t_h:.2f} h) | Decaimento Espacial λ_d: {m_sim.config.lambda_decay} m^-1")
+        print("-" * 82)
+        header = f"{'Origem \\ Destino':<22} | " + " | ".join(f"{name[:10]:<10}" for name in m_sim.node_names) + " | Total"
+        print(header)
+        print("-" * len(header))
+        for i, row in enumerate(p_mat):
+            row_str = " | ".join(f"{val*100:>9.1f}%" for val in row)
+            print(f"{m_sim.node_names[i][:22]:<22} | {row_str} | {sum(row)*100:>5.1f}%")
+        print("=" * len(header))
+        print("Atratividades Instantâneas α_j(t):")
+        for i, name in enumerate(m_sim.node_names):
+            print(f"  • {name:<22}: α = {alphas[i]:.2f}")
+        print("-" * len(header))
 
     print("\n" + "=" * 82)
     print(f"📡 GÊMEO DIGITAL IOT PELOURINHO — TELEMETRIA DE SENSORES (DOC 04)")

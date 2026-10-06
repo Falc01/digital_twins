@@ -311,6 +311,7 @@ class SensorSaturationSimulator:
         noise_method: Optional[Union[str, SensorNoiseType]] = None,
         persist_telemetry: bool = False,
         reset_noise_state: bool = False,
+        day_of_week: Optional[int] = None,
         table_manager: Any = None,
     ) -> SensorTelemetryResponse:
         """
@@ -370,7 +371,7 @@ class SensorSaturationSimulator:
             else:
                 from src.simulation.events_injection import EventsInjectionSimulator
                 events_sim = EventsInjectionSimulator()
-                evt_res = events_sim.evaluate(current_time_hours=t_hours)
+                evt_res = events_sim.evaluate(current_time_hours=t_hours, day_of_week=day_of_week)
                 base_evt = np.asarray(evt_res.vector_E_eventos, dtype=np.float64)
                 evt_arr = np.zeros(len(prop_arr), dtype=np.float64)
                 min_len = min(len(base_evt), len(evt_arr))
