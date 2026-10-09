@@ -389,15 +389,49 @@ O arcabouço matemático apresentado resolve de forma elegante a necessidade de 
 
 ---
 
-## 11. Referências Bibliográficas (Formato ABNT)
+## 11. Referências Bibliográficas e Repositórios de Acesso Aberto
 
-1. BROCKMANN, D.; HUFNAGEL, L.; GEISEL, T. The scaling laws of human travel. **Nature**, v. 444, n. 7118, p. 462–465, 2006.
-2. CAMERON, A. C.; TRIVEDI, P. K. **Regression Analysis of Count Data**. 2. ed. Cambridge: Cambridge University Press, 2013.
-3. COX, D. R. Some statistical methods connected with series of events. **Journal of the Royal Statistical Society: Series B (Methodological)**, v. 17, n. 2, p. 129–157, 1955.
-4. ERLANG, A. K. The theory of probabilities and telephone conversations. **Nyt Tidsskrift for Matematik B**, v. 20, p. 33–41, 1909.
-5. GONZÁLEZ, M. C.; HIDALGO, C. A.; BARABÁSI, A.-L. Understanding individual human mobility patterns. **Nature**, v. 453, n. 7196, p. 779–782, 2008.
-6. GREENSHIELDS, B. D. A study of traffic capacity. In: **Highway Research Board Proceedings**, v. 14, p. 448–477, 1935.
-7. HELBING, D.; MOLNAR, P. Social force model for pedestrian dynamics. **Physical Review E**, v. 51, n. 5, p. 4282–4286, 1995.
-8. KINGMAN, J. F. C. **Poisson Processes**. Oxford: Oxford University Press, 1993.
-9. RICHARDS, F. J. A flexible growth function for empirical use. **Journal of Experimental Botany**, v. 10, n. 2, p. 290–300, 1959.
-10. UHLENBECK, G. E.; ORNSTEIN, L. S. On the theory of the Brownian motion. **Physical Review**, v. 36, n. 5, p. 823–841, 1930.
+1. **ASGARI, F. et al.** Synthetic mobility generator based on semi-Markov processes. In: **ACM SIGSPATIAL International Conference on Advances in Geographic Information Systems**, p. 556–559, 2013.  
+   🔗 [DOI: 10.1145/2500423.2500435](https://doi.org/10.1145/2500423.2500435) | [ACM Digital Library](https://dl.acm.org/doi/10.1145/2500423.2500435)
+
+2. **BORGERS, A.; TIMMERMANS, H.** A model of pedestrian route choice and shopping behavior. **Geographical Analysis**, v. 18, n. 2, p. 115–130, 1986.  
+   🔗 [DOI: 10.1111/j.1538-4632.1986.tb00086.x](https://doi.org/10.1111/j.1538-4632.1986.tb00086.x) | [ResearchGate PDF](https://www.researchgate.net/publication/229871783_A_Model_of_Pedestrian_Route_Choice_and_Shopping_Behavior)
+
+3. **BROCKMANN, D.; HUFNAGEL, L.; GEISEL, T.** The scaling laws of human travel. **Nature**, v. 444, n. 7118, p. 462–465, 2006.  
+   🔗 [DOI: 10.1038/nature04292](https://doi.org/10.1038/nature04292) | [Nature Link](https://www.nature.com/articles/nature04292)
+
+4. **CAMERON, A. C.; TRIVEDI, P. K.** **Regression Analysis of Count Data**. 2. ed. Cambridge: Cambridge University Press, 2013.  
+   🔗 [DOI: 10.1017/CBO9781139013567](https://doi.org/10.1017/CBO9781139013567) | [Site Oficial dos Autores (Capítulos & Dados)](https://cameron.econ.ucdavis.edu/racd/racd.html)
+
+5. **COX, D. R.** Some statistical methods connected with series of events. **Journal of the Royal Statistical Society: Series B (Methodological)**, v. 17, n. 2, p. 129–157, 1955.  
+   🔗 [JSTOR Link](https://www.jstor.org/stable/2983950)
+
+6. **DAAMEN, W.; HOOGENDOORN, S. P.** Experimental research of pedestrian walking behavior. **Transportation Research Record**, v. 1828, n. 1, p. 20–30, 2003.  
+   🔗 [DOI: 10.3141/1828-03](https://doi.org/10.3141/1828-03)
+
+7. **ERLANG, A. K.** The theory of probabilities and telephone conversations. **Nyt Tidsskrift for Matematik B**, v. 20, p. 33–41, 1909.
+
+8. **GONZÁLEZ, M. C.; HIDALGO, C. A.; BARABÁSI, A.-L.** Understanding individual human mobility patterns. **Nature**, v. 453, n. 7196, p. 779–782, 2008.  
+   🔗 [DOI: 10.1038/nature06958](https://doi.org/10.1038/nature06958) | [arXiv PDF Direto: 0806.1256](https://arxiv.org/abs/0806.1256)
+
+9. **GREENSHIELDS, B. D.** A study of traffic capacity. In: **Highway Research Board Proceedings**, v. 14, p. 448–477, 1935.
+
+10. **HELBING, D.; MOLNAR, P.** Social force model for pedestrian dynamics. **Physical Review E**, v. 51, n. 5, p. 4282–4286, 1995.  
+    🔗 [DOI: 10.1103/PhysRevE.51.4282](https://doi.org/10.1103/PhysRevE.51.4282) | [arXiv PDF Direto: cond-mat/9805244](https://arxiv.org/abs/cond-mat/9805244)
+
+11. **HUFF, D. L.** Defining and estimating a trading area. **Journal of Marketing**, v. 28, n. 3, p. 34–38, 1964.  
+    🔗 [DOI: 10.1177/002224296402800307](https://doi.org/10.1177/002224296402800307)
+
+12. **KEMENY, J. G.; SNELL, J. L.** **Finite Markov Chains**. New York: Springer-Verlag, 1976.  
+    🔗 [Springer Link](https://link.springer.com/book/10.1007/978-1-4684-0055-7)
+
+13. **KINGMAN, J. F. C.** **Poisson Processes**. Oxford: Oxford University Press, 1993.
+
+14. **RICHARDS, F. J.** A flexible growth function for empirical use. **Journal of Experimental Botany**, v. 10, n. 2, p. 290–300, 1959.  
+    🔗 [DOI: 10.1093/jxb/10.2.290](https://doi.org/10.1093/jxb/10.2.290)
+
+15. **UHLENBECK, G. E.; ORNSTEIN, L. S.** On the theory of the Brownian motion. **Physical Review**, v. 36, n. 5, p. 823–841, 1930.  
+    🔗 [DOI: 10.1103/PhysRev.36.823](https://doi.org/10.1103/PhysRev.36.823)
+
+16. **WEIDMANN, U.** **Transporttechnik der Fussgänger: Transporttechnische Eigenschaften des Fussgängerverkehrs (Literaturauswertung)**. Schriftenreihe des IVT Nr. 90. Zurique: ETH Zürich, 1993.  
+    🔗 [ETH Zürich Research Collection (PDF Direto)](https://doi.org/10.3929/ethz-a-000687810)
