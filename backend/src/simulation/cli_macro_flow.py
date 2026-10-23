@@ -50,6 +50,12 @@ def main():
         help="Duração do ciclo temporal em minutos (Δt) para cálculo diferencial (padrão: 5.0 min).",
     )
     parser.add_argument(
+        "--regime",
+        choices=["unimodal", "trimodal", "fourier"],
+        default="unimodal",
+        help="Regime circadiano de modelagem: 'unimodal' (Gaussiana simples v1.0), 'trimodal' (mistura urbana v2.0) ou 'fourier' (harmônicos K=3).",
+    )
+    parser.add_argument(
         "--curve",
         action="store_true",
         help="Exibe a série temporal completa de 24 horas no terminal.",
@@ -70,11 +76,11 @@ def main():
     sim = MacroFlowSimulator()
 
     if args.curve:
-        curve = sim.generate_24h_curve(step_hours=args.step, gamma=args.gamma)
+        curve = sim.generate_24h_curve(step_hours=args.step, gamma=args.gamma, regime=args.regime)
         if args.json:
             print(json.dumps(curve, indent=2, ensure_ascii=False))
         else:
-            print(f"\n📈 Curva Circadiana de 24 Horas do Pelourinho (Gamma = {args.gamma}):")
+            print(f"\n📈 Curva Circadiana de 24 Horas do Pelourinho (Gamma = {args.gamma}, Regime = {args.regime}):")
             print("=" * 60)
             print(f"{'Horário':<10} | {'Hora (dec)':<12} | {'Volume Total (Pedestres)':<25}")
             print("-" * 60)
@@ -84,7 +90,7 @@ def main():
             print("=" * 60)
         return
 
-    result = sim.evaluate(t_hours=args.time, gamma=args.gamma, step_minutes=args.step_minutes)
+    result = sim.evaluate(t_hours=args.time, gamma=args.gamma, step_minutes=args.step_minutes, regime=args.regime)
 
     if args.json:
         data = result.to_response()

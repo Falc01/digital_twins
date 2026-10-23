@@ -5,7 +5,7 @@
 **Classificação:** Especificação Técnica de Evolução & Resolução de Apontamentos de Orientação  
 **Autor:** João Spinola Falcão & Supervisor Técnico Digital Twins  
 **Data:** 09/10/2026  
-**Status:** 🟡 **[EM IMPLEMENTAÇÃO / ESPECIFICADO]**
+**Status:** 🟢 **[CONCLUÍDO / HOMOLOGADO]** (27/27 testes do módulo aprovados, 95/95 na suíte global)
 
 ---
 
@@ -94,7 +94,13 @@ $$\sum_{g \in \text{GATEs}} w_g = 1.0 \implies \sum_{g} \Phi_{\text{in}, g}(t) =
 
 ## ✅ 4. Plano de Ação para Implementação no Código
 
-1. [ ] Atualizar `macro_flow.py` adicionando a função `calculate_multimodal_bairro_population()` com suporte a múltiplos picos;
-2. [ ] Manter retrocompatibilidade com chamadas legadas que passam `t_peak` e `sigma` únicos;
-3. [ ] Atualizar schemas em `schemas.py` com o modelo `UrbanGateNode` e harmonização de aliases;
-4. [ ] Validar a suíte de testes com `pytest backend/tests/test_macro_flow.py`.
+1. [x] Atualizar `macro_flow.py` adicionando a função `calculate_multimodal_bairro_population()` com suporte a múltiplos picos (Regime A Trimodal e Regime B Fourier K=3);
+2. [x] Manter retrocompatibilidade com chamadas legadas que passam `t_peak` e `sigma` únicos;
+3. [x] Atualizar schemas em `schemas.py` com o modelo `UrbanGateNode` e harmonização de aliases (`node_ids`, `sensor_ids`);
+4. [x] Validar a suíte de testes com `pytest backend/tests/test_macro_flow.py` (27/27 aprovados, 95/95 na suíte do backend).
+
+---
+
+## 📄 5. Relatório Técnico de Resolução
+Para a fundamentação detalhada dos testes, demonstrativo numérico comparativo e auditoria de cobertura, consulte:  
+👉 [`docs/logs_retorno/relatorio_resolucao_log01_v2_desacoplamento_multimodalidade.md`](file:///home/dancs/Documents/digital_twins/docs/logs_retorno/relatorio_resolucao_log01_v2_desacoplamento_multimodalidade.md)

@@ -10,11 +10,20 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, model_validator
 
 DEFAULT_SENSOR_ID_TO_INDEX = {
+    # Nós Urbanos Topológicos v2.0 (Grafo Urbano)
+    "node_elevador_lacerda": 0,
+    "node_praca_da_se": 1,
+    "node_ladeira_do_carmo": 2,
+    "node_largo_pelourinho": 3,
+    "node_terreiro_jesus": 4,
+    "node_igreja_rosario": 2,
+    "node_rosario_dos_pretos": 2,
+    # Sensores IoT v1.0 (Hardware)
     "sensor_elevador_lacerda": 0,
     "elevador_lacerda": 0,
     "sensor_praca_da_se": 1,
@@ -33,7 +42,7 @@ DEFAULT_SENSOR_ID_TO_INDEX = {
 
 
 def resolve_sensor_index(value: Any) -> Optional[int]:
-    """Resolve um identificador textual de sensor para o índice numérico correspondente."""
+    """Resolve um identificador textual de sensor ou nó urbano para o índice numérico correspondente."""
     if value is None:
         return None
     if isinstance(value, int):
@@ -48,23 +57,48 @@ def resolve_sensor_index(value: Any) -> Optional[int]:
         normalized = re.sub(r"[^a-z0-9]+", "_", raw_text.lower()).strip("_")
         if normalized in DEFAULT_SENSOR_ID_TO_INDEX:
             return DEFAULT_SENSOR_ID_TO_INDEX[normalized]
-        return DEFAULT_SENSOR_ID_TO_INDEX.get(normalized.replace("sensor_", ""))
+        cleaned = normalized.replace("sensor_", "").replace("node_", "")
+        return DEFAULT_SENSOR_ID_TO_INDEX.get(cleaned)
     return None
 
 
-class SensorGateWeight(BaseModel):
-    """Metadados e peso espacial de um portão de entrada do Pelourinho (Canal A)."""
-    sensor_id: str = Field(..., description="Identificador único do nó/sensor")
+class UrbanGateNode(BaseModel):
+    """
+    Entidade Urbana Neutra representando um nó de portão de entrada física no grafo urbano (Doc 01 v2.0).
+    Desacoplada da camada de hardware/sensores IoT.
+    """
+    node_id: str = Field(default="", description="Identificador único do nó urbano no grafo de circulação (ex: 'node_elevador_lacerda')")
+    sensor_id: str = Field(default="", description="Identificador de telemetria ou alias transparente para retrocompatibilidade")
     nome_local: str = Field(..., description="Nome amigável do logradouro ou portão de entrada")
     gate_weight: float = Field(..., ge=0.0, le=1.0, description="Fração w_j de fluxo atribuída a este portão (w_j in [0, 1])")
     max_capacity: Optional[int] = Field(None, ge=0, description="Lotação máxima individual suportada pelo nó")
     min_baseline: Optional[int] = Field(None, ge=0, description="Piso mínimo de circulação na madrugada")
-    poi_type: Optional[str] = Field("GATE", description="Categoria do atrator urbano (GATE, POI, SHOW, IGREJA)")
+    poi_type: Optional[str] = Field("GATE", description="Categoria topológica urbana (GATE, POI, SHOW, IGREJA)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def harmonize_ids(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            n_id = values.get("node_id")
+            s_id = values.get("sensor_id")
+            if n_id and not s_id:
+                values["sensor_id"] = n_id
+            elif s_id and not n_id:
+                values["node_id"] = s_id.replace("sensor_", "node_") if s_id.startswith("sensor_") else s_id
+            elif not n_id and not s_id:
+                pass
+        return values
+
+
+class SensorGateWeight(UrbanGateNode):
+    """Metadados e peso espacial de um portão de entrada do Pelourinho (Alias retrocompatível v1.0)."""
+    pass
 
 
 class MacroFlowConfig(BaseModel):
     """
     Parâmetros globais de calibração do modelo circadiano gaussiano e portões de entrada (Canais A e B).
+    Suporta v1.0 (unimodal) e v2.0 (trimodal / Fourier K=3 com desacoplamento topológico UrbanGateNode).
     """
     N_max: int = Field(default=300, ge=0, description="Capacidade/lotação máxima global do Pelourinho (pessoas)")
     N_min: int = Field(default=15, ge=0, description="Piso basal de circulação na madrugada (pessoas)")
@@ -74,34 +108,54 @@ class MacroFlowConfig(BaseModel):
     sigma: float = Field(default=3.0, gt=0.0, description="Largura temporal / espalhamento da janela turística em horas")
     T_cycle: float = Field(default=24.0, gt=0.0, description="Período fundamental circadiano (24h)")
     step_minutes: float = Field(default=5.0, gt=0.0, description="Intervalo temporal do ciclo de simulação em minutos (Δt)")
-    gates: List[SensorGateWeight] = Field(
+    regime: str = Field(
+        default="unimodal",
+        description="Regime circadiano: 'unimodal' (Gaussiana simples), 'trimodal' (mistura urbana) ou 'fourier' (harmônicos K=3)",
+    )
+    peaks: Optional[List[Dict[str, float]]] = Field(
+        default=None,
+        description="Parâmetros de múltiplos picos para regime multimodal/trimodal",
+    )
+    fourier_harmonics: Optional[List[Tuple[float, float]]] = Field(
+        default=None,
+        description="Harmônicos [(a_k, b_k)] para regime de Fourier K=3",
+    )
+    fourier_beta0: Optional[float] = Field(
+        default=None,
+        description="Nível base médio beta_0 para regime de Fourier",
+    )
+    gates: List[UrbanGateNode] = Field(
         default_factory=lambda: [
-            SensorGateWeight(
-                sensor_id="sensor_elevador_lacerda",
+            UrbanGateNode(
+                node_id="node_elevador_lacerda",
+                sensor_id="node_elevador_lacerda",
                 nome_local="Elevador Lacerda",
                 gate_weight=0.45,
                 max_capacity=150,
                 min_baseline=7,
                 poi_type="GATE",
             ),
-            SensorGateWeight(
-                sensor_id="sensor_praca_da_se",
+            UrbanGateNode(
+                node_id="node_praca_da_se",
+                sensor_id="node_praca_da_se",
                 nome_local="Praça da Sé",
                 gate_weight=0.35,
                 max_capacity=120,
                 min_baseline=5,
                 poi_type="GATE",
             ),
-            SensorGateWeight(
-                sensor_id="sensor_ladeira_do_carmo",
+            UrbanGateNode(
+                node_id="node_ladeira_do_carmo",
+                sensor_id="node_ladeira_do_carmo",
                 nome_local="Ladeira do Carmo",
                 gate_weight=0.20,
                 max_capacity=80,
                 min_baseline=3,
                 poi_type="GATE",
             ),
-            SensorGateWeight(
-                sensor_id="sensor_largo_pelourinho",
+            UrbanGateNode(
+                node_id="node_largo_pelourinho",
+                sensor_id="node_largo_pelourinho",
                 nome_local="Largo do Pelourinho (Interno)",
                 gate_weight=0.00,
                 max_capacity=200,
@@ -109,7 +163,11 @@ class MacroFlowConfig(BaseModel):
                 poi_type="POI",
             ),
         ],
-        description="Lista de nós de sensoriamento com seus respectivos pesos espaciais",
+        description="Lista de nós de portão urbano com seus respectivos pesos espaciais",
+    )
+    urban_gates: Optional[List[UrbanGateNode]] = Field(
+        default=None,
+        description="Alias de retrocompatibilidade para gates no padrão v2.0",
     )
     w_weights: List[float] = Field(
         default_factory=lambda: [0.45, 0.35, 0.20, 0.00],
@@ -121,10 +179,26 @@ class MacroFlowConfig(BaseModel):
         """Retorna o passo temporal Δt convertido em horas."""
         return self.step_minutes / 60.0
 
+    @property
+    def node_ids(self) -> List[str]:
+        """Lista dos identificadores dos nós de portão urbano."""
+        return [g.node_id for g in self.gates]
+
+    @property
+    def sensor_ids(self) -> List[str]:
+        """Lista dos identificadores de sensor (alias de compatibilidade)."""
+        return [g.sensor_id for g in self.gates]
+
     @model_validator(mode="before")
     @classmethod
     def harmonize_fields(cls, values: dict) -> dict:
         if isinstance(values, dict):
+            # Sincroniza aliases urban_gates / gates
+            if "urban_gates" in values and "gates" not in values:
+                values["gates"] = values["urban_gates"]
+            elif "gates" in values and "urban_gates" not in values:
+                values["urban_gates"] = values["gates"]
+
             # Sincroniza aliases N_max / N_max_bairro
             if "N_max_bairro" in values and "N_max" not in values:
                 values["N_max"] = values["N_max_bairro"]
@@ -157,8 +231,9 @@ class MacroFlowConfig(BaseModel):
                 f"Restrição de Conservação de Fluxo violada (RF03): "
                 f"A soma dos pesos dos portões deve ser 1.0 (encontrado: {total:.4f})."
             )
-        # Mantém w_weights espelhado com os gates
+        # Mantém w_weights e urban_gates espelhados com gates
         self.w_weights = [g.gate_weight for g in self.gates]
+        self.urban_gates = self.gates
         return self
 
 
@@ -181,6 +256,22 @@ class MacroFlowRequest(BaseModel):
         ge=0.0,
         description="Multiplicador sazonal (ex: 1.0 dia normal, 1.5 verão, 3.5 Carnaval)",
     )
+    regime: Optional[str] = Field(
+        default=None,
+        description="Regime circadiano opcional: 'unimodal', 'trimodal' ou 'fourier' (Doc 01 v2.0)",
+    )
+    peaks: Optional[List[Dict[str, float]]] = Field(
+        default=None,
+        description="Picos personalizados para regime multimodal/trimodal",
+    )
+    fourier_harmonics: Optional[List[Tuple[float, float]]] = Field(
+        default=None,
+        description="Harmônicos [(a_k, b_k)] para regime de Fourier K=3",
+    )
+    fourier_beta0: Optional[float] = Field(
+        default=None,
+        description="Nível base médio beta_0 para regime de Fourier",
+    )
     config: Optional[MacroFlowConfig] = Field(default=None, description="Configuração personalizada (opcional)")
     config_override: Optional[MacroFlowConfig] = Field(default=None, description="Alias para config")
     use_incremental: Optional[bool] = Field(
@@ -200,10 +291,11 @@ class MacroFlowRequest(BaseModel):
 
 
 class SensorAllocation(BaseModel):
-    """Alocação detalhada de pedestres calculada para um sensor individual."""
-    sensor_id: str
-    nome_local: str
-    gate_weight: float
+    """Alocação detalhada de pedestres calculada para um nó urbano / sensor individual."""
+    node_id: Optional[str] = Field(default=None, description="Identificador do nó urbano topológico (Doc 01 v2.0)")
+    sensor_id: str = Field(..., description="Identificador do sensor ou nó de portão")
+    nome_local: str = Field(..., description="Nome amigável do portão de entrada")
+    gate_weight: float = Field(..., description="Fração w_g de fluxo")
     count_pedestrians: float = Field(..., description="Volume N_rotina,j(t) em indivíduos")
     incremental_pedestrians: float = Field(default=0.0, description="Taxa/volume incremental de novos ingressos ΔN_rotina,j(t) no passo Δt")
     delta_pedestrians: float = Field(default=0.0, description="Alias para incremental_pedestrians")
@@ -212,6 +304,13 @@ class SensorAllocation(BaseModel):
     @classmethod
     def sync_allocation_aliases(cls, values: dict) -> dict:
         if isinstance(values, dict):
+            n_id = values.get("node_id")
+            s_id = values.get("sensor_id")
+            if n_id and not s_id:
+                values["sensor_id"] = n_id
+            elif s_id and not n_id:
+                values["node_id"] = s_id
+
             if "incremental_pedestrians" in values and "delta_pedestrians" not in values:
                 values["delta_pedestrians"] = values["incremental_pedestrians"]
             elif "delta_pedestrians" in values and "incremental_pedestrians" not in values:
@@ -228,6 +327,7 @@ class MacroFlowResponse(BaseModel):
     circadian_hour: float = Field(..., description="Hora do relógio circadiano h(t) em [0, 24)")
     step_minutes: float = Field(default=5.0, description="Duração do ciclo temporal de simulação Δt em minutos")
     gamma_seasonality: float = Field(..., description="Multiplicador sazonal aplicado")
+    regime: str = Field(default="unimodal", description="Regime de modelagem circadiana: 'unimodal', 'trimodal' ou 'fourier'")
     N_bairro_total: float = Field(..., description="Lotação global calculada para o Pelourinho N_bairro(t)")
     total_bairro_volume: float = Field(..., description="Alias para N_bairro_total")
     delta_N_bairro: float = Field(default=0.0, description="Variação positiva incremental de novos ingressos no bairro ΔN")
@@ -236,8 +336,9 @@ class MacroFlowResponse(BaseModel):
     vector_N_rotina: List[float] = Field(..., description="Alias para N_rotina")
     delta_N_rotina: List[float] = Field(default_factory=list, description="Vetor de influxo incremental ΔN_rotina(t) para cada portão no passo Δt")
     vector_delta_N_rotina: List[float] = Field(default_factory=list, description="Alias para delta_N_rotina")
-    allocations: List[SensorAllocation] = Field(default_factory=list, description="Lista de alocações por sensor")
+    allocations: List[SensorAllocation] = Field(default_factory=list, description="Lista de alocações por nó/sensor")
     sensor_ids: Optional[List[str]] = Field(default=None, description="IDs dos sensores correspondentes")
+    node_ids: Optional[List[str]] = Field(default=None, description="IDs dos nós urbanos topológicos correspondentes (Doc 01 v2.0)")
 
     @model_validator(mode="before")
     @classmethod
@@ -260,6 +361,12 @@ class MacroFlowResponse(BaseModel):
                 values["delta_N_rotina"] = values["vector_delta_N_rotina"]
             elif "delta_N_rotina" in values and "vector_delta_N_rotina" not in values:
                 values["vector_delta_N_rotina"] = values["delta_N_rotina"]
+
+            # Sincroniza node_ids e sensor_ids
+            if "node_ids" in values and "sensor_ids" not in values:
+                values["sensor_ids"] = values["node_ids"]
+            elif "sensor_ids" in values and "node_ids" not in values:
+                values["node_ids"] = values["sensor_ids"]
         return values
 
 

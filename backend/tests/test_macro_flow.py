@@ -25,8 +25,13 @@ from src.simulation.macro_flow import (
     calculate_circadian_hour,
     circadian_hour,
     calculate_bairro_population,
+    calculate_multimodal_bairro_population,
     calculate_bairro_volume,
+    calculate_multimodal_bairro_volume,
     calculate_bairro_influx,
+    calculate_multimodal_bairro_influx,
+    DEFAULT_TRIMODAL_PEAKS,
+    CircadianPeak,
     distribute_to_gates,
     allocate_gates,
     distribute_influx_to_gates,
@@ -34,6 +39,7 @@ from src.simulation.macro_flow import (
     calculate_macro_flow,
 )
 from src.simulation.schemas import (
+    UrbanGateNode,
     MacroFlowConfig,
     MacroFlowRequest,
     SensorGateWeight,
@@ -349,23 +355,112 @@ class TestMacroFlowSubsystem(unittest.TestCase):
         # E a taxa por minuto deve ser quase idêntica (consistência de velocidade)
         self.assertAlmostEqual(pop_2_5.rate_per_minute, pop_5_0.rate_per_minute, delta=0.05)
 
-    def test_api_differential_flow_integration(self):
-        """Valida que endpoints da API retornam os campos de fluxo incremental."""
+    def test_multimodal_trimodal_mixture_item2(self):
+        """Doc 01 v2.0 - Item 2: Testa a formulação trimodal paramétrica (Regime A).
+        Valida que às 12h30 (almoço) o fluxo supera as 14h00 (vale digestivo),
+        e que o ápice ocorre às 16h48 (16.8h).
+        """
+        pop_madrugada = calculate_multimodal_bairro_population(3.0, N_max=300, N_min=15)
+        pop_manha = calculate_multimodal_bairro_population(9.5, N_max=300, N_min=15)
+        pop_almoco = calculate_multimodal_bairro_population(12.5, N_max=300, N_min=15)
+        pop_vale = calculate_multimodal_bairro_population(14.0, N_max=300, N_min=15)
+        pop_apice = calculate_multimodal_bairro_population(16.8, N_max=300, N_min=15)
+
+        # 1. Madrugada assintótica a N_min
+        self.assertAlmostEqual(pop_madrugada.N_bairro, 15.0, delta=0.5)
+
+        # 2. Ascensão matinal
+        self.assertGreater(pop_manha.N_bairro, pop_madrugada.N_bairro)
+
+        # 3. O ponto crítico da sabatina: almoço (12h30) tem volume maior que o pós-almoço (14h00)
+        self.assertGreater(
+            pop_almoco.N_bairro,
+            pop_vale.N_bairro,
+            f"Almoço ({pop_almoco.N_bairro:.1f}) deve ser maior que 14h ({pop_vale.N_bairro:.1f})",
+        )
+
+        # 4. Ápice turístico e cultural no fim da tarde
+        self.assertGreater(pop_apice.N_bairro, pop_almoco.N_bairro)
+
+        # 5. Conservação do fluxo diferencial ΔN nos portões
+        w_weights = [0.45, 0.35, 0.20, 0.00]
+        influx_vec = distribute_influx_to_gates(pop_almoco.delta_N, w_weights)
+        self.assertAlmostEqual(sum(influx_vec), pop_almoco.delta_N, places=4)
+
+    def test_multimodal_fourier_regime_b(self):
+        """Doc 01 v2.0 - Item 2: Testa a decomposição espectral de Fourier K=3 (Regime B)."""
+        pop_t = calculate_multimodal_bairro_population(12.0, regime="fourier")
+        pop_next_day = calculate_multimodal_bairro_population(12.0 + 24.0, regime="fourier")
+
+        # Periodicidade estrita de 24h
+        self.assertAlmostEqual(pop_t.N_bairro, pop_next_day.N_bairro, places=4)
+        self.assertGreaterEqual(pop_t.delta_N, 0.0)
+
+    def test_urban_gate_node_desacoplamento_item1(self):
+        """Doc 01 v2.0 - Item 1: Testa o desacoplamento topológico (UrbanGateNode vs Sensor IoT)."""
+        node = UrbanGateNode(
+            node_id="node_elevador_lacerda",
+            nome_local="Elevador Lacerda",
+            gate_weight=0.45,
+            poi_type="GATE",
+        )
+        # Sincronização e alias de retrocompatibilidade
+        self.assertEqual(node.node_id, "node_elevador_lacerda")
+        self.assertEqual(node.sensor_id, "node_elevador_lacerda")
+
+        # Exclusão de POIs internos: peso 0.0
+        poi_interno = UrbanGateNode(
+            node_id="node_largo_pelourinho",
+            nome_local="Largo do Pelourinho",
+            gate_weight=0.00,
+            poi_type="POI",
+        )
+        self.assertEqual(poi_interno.gate_weight, 0.0)
+
+        # Suporte a configuração com urban_gates
+        config = MacroFlowConfig(
+            urban_gates=[
+                UrbanGateNode(node_id="node_elevador_lacerda", nome_local="Elevador Lacerda", gate_weight=0.5),
+                UrbanGateNode(node_id="node_praca_da_se", nome_local="Praça da Sé", gate_weight=0.5),
+            ]
+        )
+        self.assertEqual(len(config.gates), 2)
+        self.assertEqual(config.node_ids, ["node_elevador_lacerda", "node_praca_da_se"])
+        self.assertEqual(config.sensor_ids, ["node_elevador_lacerda", "node_praca_da_se"])
+
+    def test_multimodal_simulator_and_24h_curve_v2(self):
+        """Doc 01 v2.0: Testa o simulador completo com regime trimodal e geração de curva 24h."""
+        sim = MacroFlowSimulator(config=MacroFlowConfig(regime="trimodal"))
+        self.assertEqual(sim.config.regime, "trimodal")
+
+        curve = sim.generate_24h_curve(step_hours=0.25)
+        self.assertEqual(len(curve), 96)
+
+        # Encontra o ponto das 12h30 e das 14h00
+        pt_1230 = next(pt for pt in curve if pt["hour_formatted"] == "12:30")
+        pt_1400 = next(pt for pt in curve if pt["hour_formatted"] == "14:00")
+        self.assertGreater(
+            pt_1230["total_bairro_volume"],
+            pt_1400["total_bairro_volume"],
+            "Na curva de 24h, 12h30 deve ter volume maior que 14h00",
+        )
+
+    def test_api_multimodal_integration(self):
+        """Doc 01 v2.0: Valida chamada REST FastAPI para regime trimodal com retorno de node_ids."""
         payload = {
-            "current_time_hours": 14.0,
+            "current_time_hours": 12.5,
             "step_minutes": 5.0,
             "gamma_seasonality": 1.0,
-            "use_incremental": True,
+            "regime": "trimodal",
         }
         res = client.post("/api/v1/simulation/macro-flow/calculate", json=payload)
         self.assertEqual(res.status_code, 200)
         data = res.json()
-        self.assertEqual(data["step_minutes"], 5.0)
-        self.assertGreater(data["delta_N_bairro"], 0.0)
-        self.assertEqual(len(data["delta_N_rotina"]), 4)
-        self.assertAlmostEqual(sum(data["delta_N_rotina"]), data["delta_N_bairro"], places=3)
-        # Com use_incremental=True, N_rotina reflete o fluxo incremental
-        self.assertEqual(data["N_rotina"], data["delta_N_rotina"])
+        self.assertEqual(data["regime"], "trimodal")
+        self.assertTrue("node_ids" in data)
+        self.assertEqual(len(data["node_ids"]), 4)
+        self.assertEqual(data["node_ids"][0], "node_elevador_lacerda")
+        self.assertAlmostEqual(data["N_bairro_total"], 234.6, delta=1.0)
 
 
 if __name__ == "__main__":

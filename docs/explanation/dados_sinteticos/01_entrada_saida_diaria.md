@@ -1,9 +1,10 @@
 # 🌅 Doc 01: Macro-Fluxo Circadiano & Distribuição por Portões de Entrada ($w_j$)
-## Especificação Técnica para Simulação do Volume Diário de Pedestres no Pelourinho
+## Especificação Técnica para Simulação do Volume Diário de Pedestres no Pelourinho (v2.0)
 
 **Classificação:** Especificação Técnica de Subsistema / Modelo Matemático  
 **Módulo Pertencente:** Container de API (`backend/src/api/` — Subsistema de Macro-Fluxo)  
-**Documento Central de Referência:** [`00_arquitetura_ingestao_e_fluxo_dados.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/00_arquitetura_ingestao_e_fluxo_dados.md)  
+**Documento Central de Referência:** [`00_arquitetura_ingestao_e_fluxo_dados.md`](file:///home/dancs/Documents/digital_twins/docs/explanation/dados_sinteticos/00_arquitetura_ingestao_e_fluxo_dados.md)  
+**Log de Melhorias v2.0:** [`docs/logs_retorno/log_retorno_doc01_v2_desacoplamento_e_multimodalidade.md`](file:///home/dancs/Documents/digital_twins/docs/logs_retorno/log_retorno_doc01_v2_desacoplamento_e_multimodalidade.md)  
 
 ---
 
@@ -11,27 +12,29 @@
 
 O Centro Histórico do Pelourinho opera como um **sistema urbano aberto**: o público não é fixo dentro do bairro. Ao longo do dia, turistas e moradores entram pelas portas principais de acesso (Elevador Lacerda, Praça da Sé, Ladeira do Carmo) pela manhã e dispersam de volta aos hotéis e residências no período noturno.
 
-A responsabilidade deste módulo é calcular o **volume diário basal de pedestres no Pelourinho ($N_{\text{bairro}}(t)$)** utilizando a **exata fórmula do Sino Gaussiano apresentada ao orientador** e alocar essa quantidade nos sensores posicionados nos portões de entrada física através do vetor de pesos $\mathbf{w}$.
+A responsabilidade deste módulo é calcular o **volume diário basal de pedestres no Pelourinho ($N_{\text{bairro}}(t)$)** e a **taxa pura de novos ingressos ($\Delta N_{\text{bairro}}$)**, suportando o modelo clássico do Sino Gaussiano e a evolução multimodal (Mistura Trimodal e Harmônicos de Fourier), alocando essa quantidade nos nós urbanos de portão através do vetor de pesos $\mathbf{w}$.
 
 ```mermaid
 flowchart TD
     subgraph Entradas["IMPORTAÇÃO (CONFORME DOC 00)"]
-        CA["Canal A: Metadados do GeoPackage\n[N_min, N_max_bairro, Vetor w_j]"]
-        CB["Canal B: config.yaml\n[t_pico = 16.5, σ = 3.0, T_ciclo = 24.0]"]
-        CC["Canal C: Relógio do Servidor & UI\n[Hora t, Dia d, Multiplicador γ_epoca]"]
+        CA["Canal A: Grafo Urbano e Nós de Portão\n[N_min, N_max_bairro, Vetor w_j, UrbanGateNode]"]
+        CB["Canal B: config_simulacao.yaml\n[Regime: Unimodal, Trimodal ou Fourier K=3]"]
+        CC["Canal C: Relógio do Servidor & UI\n[Hora t, Passo Δt, Multiplicador γ_epoca]"]
     end
 
-    subgraph Processamento["PROCESSAMENTO MATEMÁTICO (DOC 01)"]
-        Sino["1. Avaliar a Fórmula do Sino Gaussiano:\nN_bairro(t) = γ × [ N_min + (N_max - N_min) × exp( -(h(t) - t_pico)² / 2σ² ) ]"]
-        Pond["2. Ponderar por Portão de Acesso:\nN_rotina,j(t) = w_j × N_bairro(t)"]
+    subgraph Processamento["PROCESSAMENTO MATEMÁTICO (DOC 01 v2.0)"]
+        Curva["1. Avaliar Curva Circadiana N_bairro(t):\n• Modo Unimodal: Sino Gaussiano Clássico\n• Modo Trimodal: Mistura Urbana (09h30, 12h30, 16h48)\n• Modo Fourier: Decomposição Harmônica K=3"]
+        Dif["2. Calcular Influxo Diferencial:\nΔN_bairro(t, Δt) = max(0, N_bairro(t + Δt) - N_bairro(t))"]
+        Pond["3. Ponderar por Nó de Portão Urbano:\nΦ_in,g(t) = w_g × ΔN_bairro(t, Δt)\nN_rotina,g(t) = w_g × N_bairro(t)"]
     end
 
     subgraph Saida["EXPORTAÇÃO (CANAL D)"]
-        VetorOut["Vetor de Pessoas na Rotina dos Portões:\nN_rotina(t) = [N_1, N_2, ..., N_J]^T ∈ ℝ^J (em indivíduos)"]
+        VetorOut["Ground Truth de Portões Urbanos:\nN_rotina(t) e ΔN_rotina(t) ∈ ℝ^J (em indivíduos)"]
     end
 
-    CA & CB & CC --> Sino
-    Sino --> Pond
+    CA & CB & CC --> Curva
+    Curva --> Dif
+    Dif --> Pond
     Pond --> VetorOut
 ```
 
@@ -40,23 +43,40 @@ flowchart TD
 ## 📋 2. Requisitos do Subsistema
 
 ### 2.1. Requisitos Funcionais (RFs)
-* **RF01 — Curva Exata do Sino Gaussiano:** O módulo deve computar a lotação global do Pelourinho $N_{\text{bairro}}(t)$ aplicando a exata fórmula fechada com 4 parâmetros ($N_{\min}$, $N_{\max}$, $t_{\text{pico}} \approx 16\text{h}30$, $\sigma \approx 3\text{h}$);
-* **RF02 — Distribuição por Portões ($w_j$):** O módulo deve alocar o volume $N_{\text{bairro}}(t)$ entre os sensores através do vetor de pesos $\mathbf{w} \in \mathbb{R}^J$, onde cada elemento $w_j \in [0, 1]$ representa a fatia do público que acessa o bairro por aquele portão;
-* **RF03 — Conservação de Fluxo:** A soma de todos os pesos de portão deve ser estritamente unitária ($\sum_{j=1}^J w_j = 1.0$). Sensores internos sem entrada física externa possuem $w_j = 0.0$;
+* **RF01 — Curvas Circadianas Configuráveis:** O módulo deve computar a lotação global do Pelourinho $N_{\text{bairro}}(t)$ suportando o Sino Gaussiano unimodal clássico ($t_{\text{pico}} \approx 16\text{h}30$, $\sigma \approx 3\text{h}$), a Mistura Trimodal Urbana (picos às 09h30, 12h30 e 16h48) e Séries Harmônicas de Fourier ($K=3$);
+* **RF02 — Distribuição por Portões Urbanos ($w_g$):** O módulo deve alocar o fluxo entre os nós de portão de entrada física através do vetor de pesos $\mathbf{w} \in \mathbb{R}^J$, onde cada elemento $w_g \in [0, 1]$ representa a fatia do público que acessa o bairro por aquele portão;
+* **RF03 — Conservação Estrita de Fluxo:** A soma de todos os pesos de portão deve ser estritamente unitária ($\sum_{g \in \text{GATEs}} w_g = 1.0$). Atratores internos sem entrada física externa (`node_largo_pelourinho`, `node_terreiro_jesus`) possuem peso estrito $w = 0.0$;
 * **RF04 — Modulação Sazonal ($\gamma$):** O módulo deve multiplicar a curva pelo fator sazonal $\gamma$ (ex: $\gamma = 1.0$ dias úteis; $\gamma = 1.5$ alta estação; $\gamma = 3.5$ Carnaval);
-* **RF05 — Relógio Circadiano Contínuo:** O módulo deve calcular a hora circadiana através do operador módulo $h(t) = t \pmod{24}$, garantindo simulação ininterrupta 24 horas por dia.
+* **RF05 — Relógio Circadiano Contínuo:** O módulo deve calcular a hora circadiana através do operador módulo $h(t) = t \pmod{24}$, garantindo simulação ininterrupta 24 horas por dia;
+* **RF06 — Influxo Diferencial de Borda ($\Delta N$):** Computar a variação positiva de ingressos no intervalo $[t, t + \Delta t]$ isolando novos pedestres para alimentar a cadeia de Markov (Doc 03) sem gerar duplicação de contagem.
 
 ### 2.2. Requisitos Não-Funcionais (RNFs)
-* **RNF01 — Complexidade Temporal $O(1)$:** A avaliação analítica da função exponencial executa em tempo constante ($< 10\ \mu\text{s}$) por ciclo;
-* **RNF02 — Exportação Direta em Indivíduos:** A função deve retornar diretamente a **quantidade de pessoas físicas calculadas** para cada sensor (em unidades de indivíduos), pronta para soma no barramento;
-* **RNF03 — Compatibilidade e Tipagem:** Operações aritméticas estritamente compatíveis com NumPy float64 e Python 3.11+.
+* **RNF01 — Complexidade Temporal $O(1)$:** A avaliação analítica da função executa em tempo constante ($< 30\ \mu\text{s}$) por ciclo;
+* **RNF02 — Exportação Direta em Indivíduos:** A função deve retornar diretamente a **quantidade de pessoas físicas calculadas** para cada portão (em unidades de indivíduos);
+* **RNF03 — Desacoplamento Topológico Limpo:** As entidades espaciais operam como `UrbanGateNode`, dissociando o chão da cidade dos sensores eletrônicos de telemetria IoT (delegados ao Doc 04).
 
 ---
 
-## 🧮 3. Formulação Matemática Crua (A Exata Equação da Apresentação)
+## 🧮 3. Formulação Matemática
 
-### 3.1. Equação do Volume Global do Bairro $N_{\text{bairro}}(t)$
+### 3.1. Regime Clássico: Sino Gaussiano Unimodal
 $$N_{\text{bairro}}(t) = \gamma \cdot \left[ N_{\min} + (N_{\max, \text{bairro}} - N_{\min}) \cdot \exp\left( -\frac{(h(t) - t_{\text{pico}})^2}{2\sigma^2} \right) \right]$$
+
+### 3.2. Regime Trimodal Urbano (Padrão Salvador — v2.0)
+Três fluxos parciais somados modelando o ritmo comercial, gastronômico e turístico:
+$$N_{\text{bairro}}(t) = \gamma \cdot \left[ N_{\min} + \sum_{m=1}^{3} A_m \cdot \exp\left( -\frac{(h(t) - \tau_m)^2}{2\sigma_m^2} \right) \right]$$
+
+Onde:
+1. **Pico 1 — Missas Matinais e Comércio:** $\tau_1 = 09.5$ (09h30), $\sigma_1 = 1.8\text{ h}$, $A_1 = 0.35 \times (N_{\max} - N_{\min})$;
+2. **Pico 2 — Almoço Histórico:** $\tau_2 = 12.5$ (12h30), $\sigma_2 = 1.2\text{ h}$, $A_2 = 0.55 \times (N_{\max} - N_{\min})$;
+3. **Pico 3 — Ápice Turístico / Pôr do Sol:** $\tau_3 = 16.8$ (16h48), $\sigma_3 = 2.2\text{ h}$, $A_3 = 0.90 \times (N_{\max} - N_{\min})$.
+
+### 3.3. Regime Espectral de Fourier ($K=3$)
+$$N_{\text{bairro}}(t) = \gamma \cdot \left[ \beta_0 + \sum_{k=1}^{3} \left( a_k \cos\left(\frac{2\pi k h(t)}{24}\right) + b_k \sin\left(\frac{2\pi k h(t)}{24}\right) \right) \right]$$
+
+### 3.4. Taxa de Influxo Nodal ($\Delta N_{\text{in}}$)
+$$\Delta N_{\text{bairro}}(t, \Delta t) = \max\left(0.0, \; N_{\text{bairro}}(t + \Delta t) - N_{\text{bairro}}(t)\right)$$
+$$\Phi_{\text{in}, g}(t) = w_g \cdot \Delta N_{\text{bairro}}(t, \Delta t)$$
 
 Onde:
 * $h(t) = t \pmod{24}$ é a hora do dia no relógio circadiano ($h \in [0, 24)$);

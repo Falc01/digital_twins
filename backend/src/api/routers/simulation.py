@@ -94,6 +94,7 @@ def calculate_macro_flow_endpoint(
             sensor_ids=sensor_ids if sensor_ids else None,
             step_minutes=payload.step_minutes,
             use_incremental=payload.use_incremental or False,
+            regime=payload.regime,
         )
         return response
     except ValueError as e:
@@ -117,6 +118,7 @@ def evaluate_macro_flow(payload: MacroFlowRequest) -> MacroFlowResponse:
         t_hours=payload.current_time_hours,
         gamma=payload.gamma_seasonality,
         step_minutes=payload.step_minutes,
+        regime=payload.regime,
     )
     return result.to_response()
 
@@ -139,9 +141,13 @@ def get_macro_flow_instant(
         le=120.0,
         description="Intervalo de ciclo temporal Δt em minutos para cálculo diferencial",
     ),
+    regime: Optional[str] = Query(
+        None,
+        description="Regime circadiano: 'unimodal', 'trimodal' ou 'fourier' (Doc 01 v2.0)",
+    ),
 ) -> MacroFlowResponse:
     """Consulta rápida via GET do estado do macro-fluxo instantâneo."""
-    result = _DEFAULT_SIMULATOR.evaluate(t_hours=time_hours, gamma=gamma, step_minutes=step_minutes)
+    result = _DEFAULT_SIMULATOR.evaluate(t_hours=time_hours, gamma=gamma, step_minutes=step_minutes, regime=regime)
     return result.to_response()
 
 
@@ -159,10 +165,14 @@ def get_macro_flow_24h_curve(
         le=10.0,
         description="Fator sazonal multiplicador",
     ),
+    regime: Optional[str] = Query(
+        None,
+        description="Regime circadiano: 'unimodal', 'trimodal' ou 'fourier' (Doc 01 v2.0)",
+    ),
 ) -> MacroFlowCurveResponse:
     """Retorna a série temporal completa de 24 horas para renderização em gráficos."""
     step_hours = step_minutes / 60.0
-    curve_data = _DEFAULT_SIMULATOR.generate_24h_curve(step_hours=step_hours, gamma=gamma)
+    curve_data = _DEFAULT_SIMULATOR.generate_24h_curve(step_hours=step_hours, gamma=gamma, regime=regime)
     points = [MacroFlowCurvePoint(**p) for p in curve_data]
     
     cfg = _DEFAULT_SIMULATOR.config

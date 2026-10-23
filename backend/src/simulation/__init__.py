@@ -6,6 +6,7 @@ conforme especificado em docs/explanation/dados_sinteticos/.
 """
 
 from src.simulation.schemas import (
+    UrbanGateNode,
     SensorGateWeight,
     SensorAllocation,
     MacroFlowConfig,
@@ -33,6 +34,8 @@ from src.simulation.schemas import (
     SensorTelemetryResponse,
 )
 from src.simulation.macro_flow import (
+    CircadianPeak,
+    DEFAULT_TRIMODAL_PEAKS,
     MacroFlowSimulator,
     MacroFlowResult,
     BairroPopulation,
@@ -40,8 +43,11 @@ from src.simulation.macro_flow import (
     circadian_hour,
     current_system_hour,
     calculate_bairro_population,
+    calculate_multimodal_bairro_population,
     calculate_bairro_volume,
+    calculate_multimodal_bairro_volume,
     calculate_bairro_influx,
+    calculate_multimodal_bairro_influx,
     normalize_gate_weights,
     distribute_to_gates,
     allocate_gates,
@@ -74,6 +80,7 @@ from src.simulation.sensor_saturation import (
 
 __all__ = [
     # Schemas Macro-Fluxo (Doc 01)
+    "UrbanGateNode",
     "SensorGateWeight",
     "SensorAllocation",
     "MacroFlowConfig",
@@ -82,6 +89,8 @@ __all__ = [
     "MacroFlowCurvePoint",
     "MacroFlowCurveResponse",
     # Motor Macro-Fluxo (Doc 01)
+    "CircadianPeak",
+    "DEFAULT_TRIMODAL_PEAKS",
     "MacroFlowSimulator",
     "MacroFlowResult",
     "BairroPopulation",
@@ -89,8 +98,11 @@ __all__ = [
     "circadian_hour",
     "current_system_hour",
     "calculate_bairro_population",
+    "calculate_multimodal_bairro_population",
     "calculate_bairro_volume",
+    "calculate_multimodal_bairro_volume",
     "calculate_bairro_influx",
+    "calculate_multimodal_bairro_influx",
     "normalize_gate_weights",
     "distribute_to_gates",
     "allocate_gates",
