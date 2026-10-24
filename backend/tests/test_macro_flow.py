@@ -2,7 +2,7 @@
 Suíte de Testes Automatizados para o Macro-Fluxo Circadiano (Doc 01).
 
 Valida os Requisitos Funcionais (RF01 a RF05) e Não-Funcionais (RNF01 a RNF03)
-especificados em docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md,
+especificados em docs/explanation/dados_sinteticos/01_modulo_de_entrada.md,
 unificando os testes funcionais de endpoints e os testes analíticos formais.
 """
 

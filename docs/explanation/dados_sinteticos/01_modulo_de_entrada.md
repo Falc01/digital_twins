@@ -1,4 +1,4 @@
-# 🌅 Doc 01: Macro-Fluxo Circadiano & Distribuição por Portões de Entrada ($w_j$)
+# 🌅 Doc 01: Módulo de Entrada — Macro-Fluxo Circadiano & Distribuição por Portões ($w_j$)
 ## Especificação Técnica para Simulação do Volume Diário de Pedestres no Pelourinho (v2.0)
 
 **Classificação:** Especificação Técnica de Subsistema / Modelo Matemático  

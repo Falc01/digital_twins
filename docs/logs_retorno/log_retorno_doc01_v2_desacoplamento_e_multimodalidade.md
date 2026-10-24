@@ -1,6 +1,6 @@
 # 📋 Log de Melhorias e Mudanças — Módulo 01 (v2.0): Desacoplamento Urbano & Multimodalidade Circadiana
 
-**Documento Referenciado:** [`docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md)  
+**Documento Referenciado:** [`docs/explanation/dados_sinteticos/01_modulo_de_entrada.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/01_modulo_de_entrada.md)  
 **Arquivo de Implementação:** [`backend/src/simulation/macro_flow.py`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/backend/src/simulation/macro_flow.py)  
 **Classificação:** Especificação Técnica de Evolução & Resolução de Apontamentos de Orientação  
 **Autor:** João Spinola Falcão & Supervisor Técnico Digital Twins  

@@ -56,7 +56,7 @@ O gerador de dados sintéticos simula a mobilidade urbana no Pelourinho através
 
 ### A Suíte Modular Especializada (Docs 00 a 05)
 1. 📄 [**Doc 00: Arquitetura de Ingestão e Fluxo de Dados**](explanation/dados_sinteticos/00_arquitetura_ingestao_e_fluxo_dados.md): Barramento central e persistência no GeoPackage;
-2. 📄 [**Doc 01: Macro-Fluxo Circadiano de Portões**](explanation/dados_sinteticos/01_entrada_saida_diaria.md): Influxo de pessoas nos portões de entrada física ($w_j$);
+2. 📄 [**Doc 01: Módulo de Entrada (Macro-Fluxo Circadiano de Portões)**](explanation/dados_sinteticos/01_modulo_de_entrada.md): Influxo de pessoas nos portões de entrada física ($w_j$);
 3. 📄 [**Doc 02: Injeção Dinâmica de Eventos**](explanation/dados_sinteticos/02_injecao_eventos.md): Surtos de público por atrações culturais e shows;
 4. 📄 [**Doc 03: Circulação em Rede via Markov & Gravidade**](explanation/dados_sinteticos/03_circulacao_markov_pois.md): Caminhada entre ruas e praças, inércia de permanência e saída noturna nos portões (*egress*);
 5. 📄 [**Doc 04: Saturação Física de Richards & Ruído IoT**](explanation/dados_sinteticos/04_saturacao_ruido_sensor.md): Camada de telemetria de hardware e ruído estocástico de Ornstein-Uhlenbeck;

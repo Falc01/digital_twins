@@ -4,7 +4,7 @@
 **Data:** 23 de Outubro de 2026  
 **Contexto:** Gêmeo Digital IoT do Centro Histórico do Pelourinho — UNIFACS  
 **Documento Referenciado:** [`docs/logs_retorno/log_retorno_doc01_v2_desacoplamento_e_multimodalidade.md`](file:///home/dancs/Documents/digital_twins/docs/logs_retorno/log_retorno_doc01_v2_desacoplamento_e_multimodalidade.md)  
-**Especificação Técnica:** [`docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md`](file:///home/dancs/Documents/digital_twins/docs/explanation/dados_sinteticos/01_entrada_saida_diaria.md)  
+**Especificação Técnica:** [`docs/explanation/dados_sinteticos/01_modulo_de_entrada.md`](file:///home/dancs/Documents/digital_twins/docs/explanation/dados_sinteticos/01_modulo_de_entrada.md)  
 **Módulos Alterados:** `backend/src/simulation/macro_flow.py`, `backend/src/simulation/schemas.py`, `backend/src/simulation/__init__.py`, `backend/src/api/routers/simulation.py`, `backend/src/simulation/cli_macro_flow.py`, `backend/tests/test_macro_flow.py`  
 **Status Final:** ✅ Homologado com 27/27 testes unitários do Módulo 01 e 95/95 testes aprovados em toda a suíte do backend (100% green).
 
