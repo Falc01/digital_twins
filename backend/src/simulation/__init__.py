@@ -77,6 +77,11 @@ from src.simulation.sensor_saturation import (
     determine_sensor_status,
     simulate_sensor_telemetry,
 )
+from src.simulation.rollout import (
+    RolloutSimulationEngine,
+    RolloutStep,
+    RolloutSummary,
+)
 
 __all__ = [
     # Schemas Macro-Fluxo (Doc 01)
@@ -149,5 +154,8 @@ __all__ = [
     "clip_and_discretize_sensor_readings",
     "determine_sensor_status",
     "simulate_sensor_telemetry",
+    # Simulação Contínua / Rollout (Docs 01 + 02 + 03)
+    "RolloutSimulationEngine",
+    "RolloutStep",
+    "RolloutSummary",
 ]
-
