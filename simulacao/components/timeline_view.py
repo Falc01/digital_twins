@@ -16,12 +16,12 @@ def render_timeline_charts(summary: RolloutSummary):
     """
     st.subheader("📈 Curva Circadiana de 24 Horas & Balanço de Ingressos/Saídas")
 
-    # Métricas Executivas
+    # Métricas Executivas (estritamente em contagens inteiras de indivíduos)
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Pico Máximo de Lotação", f"{summary.peak_population:.1f} pessoas", f"às {summary.peak_time_formatted}")
-    m2.metric("Total de Ingressos no Dia", f"+{summary.cumulative_inflow:.1f} pessoas", "Entraram no Pelourinho")
-    m3.metric("Total de Saídas (Egress)", f"-{summary.cumulative_egress:.1f} pessoas", "Foram embora da cidade")
-    m4.metric("Saldo Líquido da Cidade", f"{summary.net_city_balance:+.1f} pessoas", "Balanço residual diário")
+    m1.metric("Pico Máximo de Lotação", f"{int(round(summary.peak_population)):,} pessoas", f"às {summary.peak_time_formatted}")
+    m2.metric("Total de Ingressos no Dia", f"+{int(round(summary.cumulative_inflow)):,} pessoas", "Entraram no Pelourinho")
+    m3.metric("Total de Saídas (Egress)", f"-{int(round(summary.cumulative_egress)):,} pessoas", "Foram embora da cidade")
+    m4.metric("Saldo Líquido da Cidade", f"{int(round(summary.net_city_balance)):+d} pessoas", "Balanço residual diário")
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
@@ -66,7 +66,7 @@ def render_timeline_charts(summary: RolloutSummary):
         fig_curve.add_annotation(
             x=summary.peak_time_formatted,
             y=summary.peak_population,
-            text=f"Ápice: {summary.peak_population:.1f}p ({summary.peak_time_formatted})",
+            text=f"Ápice: {int(round(summary.peak_population))} pess. ({summary.peak_time_formatted})",
             showarrow=True,
             arrowhead=2,
             arrowcolor="#EF4444",

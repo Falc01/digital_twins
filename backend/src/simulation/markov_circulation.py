@@ -32,6 +32,23 @@ from src.simulation.events_injection import calculate_events_injection
 
 logger = logging.getLogger("simulation.markov_circulation")
 
+# Matriz padrão de Adjacência Topológica Urbana do Pelourinho (5 nós oficiais)
+# Representa conexões físicas de ruas transitáveis a pé sem teletransporte mágico.
+# Nós:
+# 0: Elevador Lacerda (GATE)
+# 1: Praça da Sé (GATE)
+# 2: Ladeira do Carmo (GATE)
+# 3: Largo do Pelourinho (SHOW)
+# 4: Terreiro de Jesus (IGREJA)
+DEFAULT_PELOURINHO_ADJACENCY = np.array([
+    #  0    1    2    3    4
+    [1.0, 1.0, 0.0, 0.0, 1.0],  # 0: Elevador -> Elevador, Sé, Terreiro
+    [1.0, 1.0, 0.0, 0.0, 1.0],  # 1: Sé -> Elevador, Sé, Terreiro
+    [0.0, 0.0, 1.0, 1.0, 0.0],  # 2: Carmo -> Carmo, Largo Pelourinho
+    [0.0, 0.0, 1.0, 1.0, 1.0],  # 3: Largo Pelourinho -> Carmo, Largo, Terreiro
+    [1.0, 1.0, 0.0, 1.0, 1.0],  # 4: Terreiro -> Elevador, Sé, Largo, Terreiro
+], dtype=np.float64)
+
 
 def compute_distance_matrix(coords: Sequence[Tuple[float, float]]) -> np.ndarray:
     """
@@ -73,9 +90,10 @@ def evaluate_hourly_attraction(
     """
     Modula a atratividade horária alpha_j(t) de cada POI conforme seu papel urbano (RF02).
     
-    - IGREJA: Pico matinal/vespertino (missas e visitação histórica);
-    - SHOW / POI: Pico vespertino/noturno (apresentações, ensaios de blocos e turismo);
-    - GATE: Pico nos horários de entrada (manhã) e dispersão turística (fim de tarde).
+    - IGREJA: Pico matinal/vespertino (missas e visitação histórica, 10h-14h);
+    - SHOW / POI: Pico vespertino/noturno (apresentações, ensaios de blocos e turismo, 17h-21h);
+    - GATE: Atração moderada/baixa durante o dia (fluxo é de entrada em direção às praças)
+      e inversão expressiva no fim de tarde e noite (17h-23h), atuando como ímã de retorno/saída (egress).
     
     Args:
         t_hours: Horário contínuo em horas (t >= 0).
@@ -93,27 +111,29 @@ def evaluate_hourly_attraction(
         p_upper = p_type.upper() if isinstance(p_type, str) else "POI"
         
         if p_upper == "IGREJA":
-            # Pico de atração por volta das 10h30 (sigma = 3.0h)
-            diff = h - 10.5
+            # Pico de atração matinal e diurna (missas, turismo histórico: 10h-14h)
+            diff = h - 11.5
             bell = math.exp(-(diff * diff) / (2.0 * 9.0))
-            modulation = 1.0 + 0.8 * bell
+            modulation = 0.5 + 1.2 * bell
         elif p_upper in ("SHOW", "EVENTO"):
-            # Pico cultural entre 18h e 21h (centralizado em 19h00, sigma = 2.5h)
+            # Pico cultural vespertino e noturno (centralizado em 19h00, sigma = 2.5h)
             diff = h - 19.0
             bell = math.exp(-(diff * diff) / (2.0 * 6.25))
-            modulation = 1.0 + 1.2 * bell
+            modulation = 0.6 + 1.8 * bell
         elif p_upper == "GATE":
-            # Portões de entrada física: picos matinal (08h) e de dispersão (17h30)
-            diff_in = h - 8.5
-            diff_out = h - 17.5
-            bell_in = math.exp(-(diff_in * diff_in) / (2.0 * 4.0))
-            bell_out = math.exp(-(diff_out * diff_out) / (2.0 * 4.0))
-            modulation = 1.0 + 0.4 * (bell_in + bell_out)
+            # Portões de entrada física:
+            # Durante manhã e início de tarde (08h-15h): atratividade contida (~0.5 a 0.8),
+            # pois pedestres são atraídos para o miolo histórico (Terreiro/Largo).
+            # No final de tarde e noite (17h-23h): sobe para (~1.8 a 2.5) puxando pedestres para egress.
+            diff_out = h - 18.5
+            bell_out = math.exp(-(diff_out * diff_out) / (2.0 * 6.25))
+            egress_pull = 1.0 / (1.0 + math.exp(-0.7 * (h - 16.5)))
+            modulation = 0.5 + 1.4 * egress_pull + 0.5 * bell_out
         else:  # POI padrão / praça
             # Lenta ascensão vespertina (pico às 16h30 acompanhando o turismo)
             diff = h - 16.5
             bell = math.exp(-(diff * diff) / (2.0 * 12.25))
-            modulation = 1.0 + 0.5 * bell
+            modulation = 0.6 + 1.0 * bell
             
         alphas[idx] = max(0.1, float(base_alpha) * modulation)
         
@@ -154,30 +174,33 @@ def calculate_gate_egress_probability(
 def compute_markov_matrix(
     dist_matrix: np.ndarray,
     alpha_vector: Sequence[float],
-    lambda_decay: float = 0.015,
+    lambda_decay: float = 0.005,
     retention_bias: float = 1.0,
     step_minutes: float = 5.0,
     dwell_time_minutes: float = 20.0,
     use_inertia: bool = False,
     egress_rates: Optional[Sequence[float]] = None,
+    adjacency_matrix: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Computa a Matriz Estocástica de Transição de Markov P(t) de dimensão J x J (RF01, RF03, RF04).
     
     Suporta:
     - Gravidade Espacial de Huff: Numerador_ij = alpha_j(t) * exp(-lambda_d * d_ij);
+    - Topologia Urbana / Adjacência: A_ij in {0, 1} impede transições mágicas entre portões distantes;
     - Inércia Temporal Convexo: rho = exp(-dt / tau_dwell);
     - Cadeia de Markov Aberta com Egress: P_ij = (1 - p_exit,i) * P_ij_interno.
         
     Args:
         dist_matrix: Matriz (J, J) de distâncias euclidianas em metros.
         alpha_vector: Vetor (J,) de atratividade instantânea dos POIs.
-        lambda_decay: Taxa de atrito espacial lambda_d (padrão 0.015 m^-1).
+        lambda_decay: Taxa de atrito espacial lambda_d (padrão 0.005 m^-1 para pedestres).
         retention_bias: Fator multiplicativo de permanência no mesmo nó.
         step_minutes: Passo temporal da simulação dt em minutos.
         dwell_time_minutes: Tempo médio de permanência tau_dwell para inércia.
         use_inertia: Ativar inércia de permanência temporal.
         egress_rates: Vetor opcional (J,) com probabilidade de saída de cada nó (GATE).
+        adjacency_matrix: Matriz binária (J, J) de adjacência de ruas/logradouros transitáveis.
         
     Returns:
         np.ndarray: Matriz (J, J) float64 de probabilidades de transição.
@@ -202,6 +225,13 @@ def compute_markov_matrix(
     # Aplica o viés de permanência no mesmo logradouro se diferente de 1.0
     if retention_bias != 1.0 and retention_bias > 0.0:
         np.fill_diagonal(numerator, np.diag(numerator) * retention_bias)
+
+    # Aplica máscara de adjacência topológica urbana (RF01 / Topologia de Rede)
+    if adjacency_matrix is not None:
+        adj = np.asarray(adjacency_matrix, dtype=np.float64)
+        if adj.shape != (j_nodes, j_nodes):
+            raise ValueError(f"A matriz de adjacência deve ter dimensão ({j_nodes}, {j_nodes}).")
+        numerator = numerator * (adj > 0.0).astype(np.float64)
         
     # Normalização estocástica por linha: Denominador_i = sum_k Numerador_ik
     denominators = np.sum(numerator, axis=1, keepdims=True)
@@ -268,8 +298,19 @@ class MarkovCirculationSimulator:
     e a redistribuição contínua de pedestres.
     """
 
-    def __init__(self, config: Optional[MarkovCirculationConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[MarkovCirculationConfig] = None,
+        adjacency_matrix: Optional[np.ndarray] = None,
+    ) -> None:
         self.config = config or MarkovCirculationConfig()
+        if adjacency_matrix is not None:
+            self.adjacency_matrix = adjacency_matrix
+        elif len(self.config.nodes) == 5:
+            # Rede padrão do Pelourinho (5 nós oficiais)
+            self.adjacency_matrix = DEFAULT_PELOURINHO_ADJACENCY
+        else:
+            self.adjacency_matrix = None
         self._init_spatial_network()
 
     def _init_spatial_network(self) -> None:
@@ -332,6 +373,7 @@ class MarkovCirculationSimulator:
             dwell_time_minutes=self.config.dwell_time_minutes,
             use_inertia=inertia_on,
             egress_rates=egress_rates,
+            adjacency_matrix=self.adjacency_matrix,
         )
         return p_matrix, alphas
 

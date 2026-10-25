@@ -86,3 +86,26 @@ def test_rollout_live_generator():
     assert len(steps_received) == 4
     assert steps_received[0].hour_formatted == "10:00"
     assert steps_received[-1].hour_formatted == "11:30"
+
+
+def test_rollout_step_size_consistency_with_events():
+    """Valida se a ativação de eventos com diferentes passos (30m vs 60m) é consistente e produz inteiros."""
+    engine_30 = RolloutSimulationEngine(regime="trimodal", enable_events=True)
+    engine_60 = RolloutSimulationEngine(regime="trimodal", enable_events=True)
+
+    summary_30 = engine_30.run_batch(start_hour=0.0, end_hour=24.0, step_minutes=30.0)
+    summary_60 = engine_60.run_batch(start_hour=0.0, end_hour=24.0, step_minutes=60.0)
+
+    # Ingressos acumulados devem ser consistentes (< 5% de tolerância de discretização)
+    assert math.isclose(summary_30.cumulative_inflow, summary_60.cumulative_inflow, rel_tol=0.05)
+    assert math.isclose(summary_30.cumulative_egress, summary_60.cumulative_egress, rel_tol=0.05)
+
+    # Picos não devem explodir (evita acúmulo descontrolado de 900+ pessoas às 23h)
+    assert summary_30.peak_population <= 350.0
+    assert summary_60.peak_population <= 350.0
+
+    # Valores devem ser estritamente inteiros
+    for s in summary_30.steps:
+        assert float(s.total_population).is_integer()
+        for count in s.state_N:
+            assert float(count).is_integer()

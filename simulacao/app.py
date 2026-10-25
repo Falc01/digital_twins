@@ -25,6 +25,7 @@ import numpy as np
 from src.simulation.rollout import RolloutSimulationEngine
 from src.simulation.schemas import MacroFlowConfig
 from simulacao.components.sidebar import render_sidebar
+from simulacao.components.cartesian_view import render_cartesian_view
 from simulacao.components.node_cards import render_node_cards
 from simulacao.components.markov_view import render_markov_view
 from simulacao.components.timeline_view import render_timeline_charts
@@ -86,10 +87,12 @@ def main():
     with col_info:
         selected_step_idx = hour_labels.index(selected_hour_str)
         curr_step = summary.steps[selected_step_idx]
+        tot_pop = int(round(curr_step.total_population))
+        net_flux = int(round(curr_step.net_flux))
         st.metric(
             label="Lotação no Horário",
-            value=f"{curr_step.total_population:.1f} pess.",
-            delta=f"{curr_step.net_flux:+.1f} fluxo líquido",
+            value=f"{tot_pop:,} pess.",
+            delta=f"{net_flux:+d} fluxo líquido",
         )
 
     # Obtém detalhes de fluxo de Markov para o horário inspecionado
@@ -103,15 +106,27 @@ def main():
     )
 
     # 6. Abas Principais da Aplicação
-    tab_dashboard, tab_timeline, tab_markov, tab_doc = st.tabs([
-        "📊 Painel de Bordo (Cards dos Nós)",
+    tab_cartesian, tab_dashboard, tab_timeline, tab_markov, tab_doc = st.tabs([
+        "🗺️ Plano Cartesiano 2D & Calor de Tráfego",
+        "📊 Cards dos Nós (Balanço Físico)",
         "📈 Curvas de 24 Horas & Balanço",
         "🔄 Matriz de Transição P(t)",
         "📖 Metodologia & Legendas da IC",
     ])
 
+    with tab_cartesian:
+        render_cartesian_view(
+            step_info=curr_step,
+            sim=engine.markov_sim,
+            step_minutes=params["step_minutes"],
+        )
+
     with tab_dashboard:
-        render_node_cards(step_info=curr_step, node_flows=markov_res.node_flows)
+        render_node_cards(
+            step_info=curr_step,
+            node_flows=markov_res.node_flows,
+            alpha_vector=markov_res.attraction_vector,
+        )
 
     with tab_timeline:
         render_timeline_charts(summary=summary)

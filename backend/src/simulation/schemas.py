@@ -411,7 +411,7 @@ class MarkovCirculationConfig(BaseModel):
     Parâmetros de configuração e calibração espacial da rede de Markov (Canal B).
     """
     lambda_decay: float = Field(
-        default=0.015,
+        default=0.005,
         gt=0.0,
         description="Taxa de decaimento espacial por metro lambda_d (padrão 0.015 m^-1)",
     )

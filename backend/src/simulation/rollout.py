@@ -211,22 +211,26 @@ class RolloutSimulationEngine:
         n_propagated = np.array(markov_res.vector_N_propagado, dtype=np.float64)
         n_egress = np.array(markov_res.vector_N_egress, dtype=np.float64)
 
-        # 4. Atualização de Estado: N(t+1) = N_propagado + Influxo + Eventos
-        new_state_N = np.maximum(0.0, n_propagated + delta_inflow + events_vec)
+        # 4. Atualização de Estado:
+        # Base circulante que se redistribui no tempo: N_base(t+1) = N_propagado + Influxo
+        new_state_base = np.maximum(0.0, n_propagated + delta_inflow)
 
-        # Metadados por nó
+        # Lotação total observada no nó no instante t: inclui a presença do evento (Doc 02)
+        total_occupancy_N = np.maximum(0.0, new_state_base + events_vec)
+
+        # Metadados por nó formatados estritamente como inteiros (sem frações estranhas na UI)
         inflow_dict = {}
         egress_dict = {}
         occupancy_dict = {}
         for idx, name in enumerate(self.node_names):
-            occupancy_dict[name] = float(new_state_N[idx])
+            occupancy_dict[name] = float(int(round(total_occupancy_N[idx])))
             if self.poi_types[idx].upper() == "GATE":
-                inflow_dict[name] = float(delta_inflow[idx])
-                egress_dict[name] = float(n_egress[idx])
+                inflow_dict[name] = float(int(round(delta_inflow[idx])))
+                egress_dict[name] = float(int(round(n_egress[idx])))
 
-        tot_pop = float(np.sum(new_state_N))
-        tot_in = float(np.sum(delta_inflow))
-        tot_out = float(np.sum(n_egress))
+        tot_pop = float(int(round(np.sum(total_occupancy_N))))
+        tot_in = float(int(round(np.sum(delta_inflow))))
+        tot_out = float(int(round(np.sum(n_egress))))
         net_flux = tot_in - tot_out
 
         step_info = RolloutStep(
@@ -237,7 +241,7 @@ class RolloutSimulationEngine:
             total_inflow=tot_in,
             total_egress=tot_out,
             net_flux=net_flux,
-            state_N=new_state_N.tolist(),
+            state_N=[float(int(round(v))) for v in total_occupancy_N],
             node_names=self.node_names,
             poi_types=self.poi_types,
             inflow_by_gate=inflow_dict,
@@ -245,7 +249,7 @@ class RolloutSimulationEngine:
             occupancy_by_node=occupancy_dict,
         )
 
-        return new_state_N, step_info
+        return new_state_base, step_info
 
     def run_batch(
         self,
