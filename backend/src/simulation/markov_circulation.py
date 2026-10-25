@@ -112,28 +112,28 @@ def evaluate_hourly_attraction(
         
         if p_upper == "IGREJA":
             # Pico de atração matinal e diurna (missas, turismo histórico: 10h-14h)
-            diff = h - 11.5
+            diff = h - 11.0
             bell = math.exp(-(diff * diff) / (2.0 * 9.0))
-            modulation = 0.5 + 1.2 * bell
+            modulation = 0.6 + 0.8 * bell
         elif p_upper in ("SHOW", "EVENTO"):
             # Pico cultural vespertino e noturno (centralizado em 19h00, sigma = 2.5h)
             diff = h - 19.0
             bell = math.exp(-(diff * diff) / (2.0 * 6.25))
-            modulation = 0.6 + 1.8 * bell
+            modulation = 0.5 + 0.7 * bell
         elif p_upper == "GATE":
             # Portões de entrada física:
             # Durante manhã e início de tarde (08h-15h): atratividade contida (~0.5 a 0.8),
             # pois pedestres são atraídos para o miolo histórico (Terreiro/Largo).
-            # No final de tarde e noite (17h-23h): sobe para (~1.8 a 2.5) puxando pedestres para egress.
+            # No final de tarde e noite (17h-23h): sobe para (~1.5 a 1.8) puxando pedestres para egress.
             diff_out = h - 18.5
             bell_out = math.exp(-(diff_out * diff_out) / (2.0 * 6.25))
             egress_pull = 1.0 / (1.0 + math.exp(-0.7 * (h - 16.5)))
-            modulation = 0.5 + 1.4 * egress_pull + 0.5 * bell_out
+            modulation = 0.5 + 0.8 * egress_pull + 0.4 * bell_out
         else:  # POI padrão / praça
             # Lenta ascensão vespertina (pico às 16h30 acompanhando o turismo)
             diff = h - 16.5
             bell = math.exp(-(diff * diff) / (2.0 * 12.25))
-            modulation = 0.6 + 1.0 * bell
+            modulation = 0.6 + 0.7 * bell
             
         alphas[idx] = max(0.1, float(base_alpha) * modulation)
         
@@ -221,7 +221,7 @@ def compute_markov_matrix(
     # Numerador gravitacional vetorizado: broadcast de alpha_j sobre a exponencial de distâncias
     spatial_decay = np.exp(-lambda_decay * d_mat)
     numerator = alphas[np.newaxis, :] * spatial_decay
-    
+
     # Aplica o viés de permanência no mesmo logradouro se diferente de 1.0
     if retention_bias != 1.0 and retention_bias > 0.0:
         np.fill_diagonal(numerator, np.diag(numerator) * retention_bias)
@@ -232,7 +232,7 @@ def compute_markov_matrix(
         if adj.shape != (j_nodes, j_nodes):
             raise ValueError(f"A matriz de adjacência deve ter dimensão ({j_nodes}, {j_nodes}).")
         numerator = numerator * (adj > 0.0).astype(np.float64)
-        
+
     # Normalização estocástica por linha: Denominador_i = sum_k Numerador_ik
     denominators = np.sum(numerator, axis=1, keepdims=True)
     denominators = np.where(denominators <= 0.0, 1.0, denominators)

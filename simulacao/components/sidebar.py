@@ -71,15 +71,6 @@ def render_sidebar() -> Dict[str, Any]:
             help="Injeta pulsos pontuais de eventos culturais no Pelourinho (ex: Terça da Benção, ensaios).",
         )
 
-        st.divider()
-        st.subheader("4. Modo de Visualização")
-        mode = st.radio(
-            "Modo de Operação",
-            options=["Dia Completo (24h em Lote)", "Relógio Interativo (Passo a Passo)"],
-            index=0,
-            help="Dia Completo: computa as 24h e permite navegar por qualquer horário. Passo a Passo: avança ciclo a ciclo.",
-        )
-
     return {
         "n_max": int(n_max),
         "n_min": int(n_min),
@@ -87,5 +78,4 @@ def render_sidebar() -> Dict[str, Any]:
         "regime": regime,
         "step_minutes": float(step_minutes),
         "enable_events": enable_events,
-        "mode": mode,
     }
