@@ -29,9 +29,19 @@ $$E_j(t) = \sum_{m=1}^{M_j} A_{jm} \cdot \exp\left( -\frac{(t - \tau_{jm})^2}{2\
 
 Onde:
 * $t$: Horário contínuo atual de simulação em horas;
-* $A_{jm}$: Magnitude de pico do evento (indivíduos);
-* $\tau_{jm}$: Horário central do evento (ex: $20.0 = 20\text{h}00$);
+* $\tau_{jm}$: Horário central de pico do evento (ex: $20.0 = 20\text{h}00$);
 * $\sigma_{jm}$: Duração / dispersão da atração em horas (ex: $\sigma = 1.5\text{h}$).
+
+#### Suporte Dual de Magnitude ($A_{jm}$) — Invariância de Escala:
+Para que o simulador funcione com números reais da cidade (seja $N_{\max} = 300$ em testes ou $N_{\max} = 15.000$ no Carnaval real), a magnitude $A_{jm}$ suporta dois modos de entrada configuráveis pelo gestor:
+
+1. **Modo Proporcional / Relativo (`mode: "RELATIVE"`):**
+   * O gestor informa a fração $\phi_{jm} \in [0.05, 0.95]$ da capacidade do espaço.
+   * Amplitude dinâmica: $A_{jm} = \phi_{jm} \cdot N_{j, \max}$.
+   * *Vantagem:* Se o gestor alterar a escala da cidade de 300 para 5.000 pessoas, o evento escala proporcionalmente e **continua relevante e visível**, atraindo 50% da lotação do largo em qualquer escala.
+2. **Modo Absoluto (`mode: "ABSOLUTE"`):**
+   * O gestor informa o número exato de indivíduos físicos (ex: $A_{jm} = 1.200$ pessoas).
+   * Ideal para eventos com estimativa de público conhecida da PM/Polícia ou venda de ingressos com lotação fechada.
 
 ---
 
