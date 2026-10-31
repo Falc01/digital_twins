@@ -1,105 +1,134 @@
-# 📅 RFC-001: Modelagem de Dias da Semana, Perfis Circadianos Diferenciados e Simulação Multidiária
+# 📅 RFC-001: Especificação Técnica de Entrada e Saída — Dias da Semana, Picos Modulares e Dinâmica de POIs
 
-**Status:** Proposta Técnica (Backlog / Para Implementação)  
-**Módulo Pertencente:** Doc 01 (`backend/src/simulation/macro_flow.py`) e Motor de Rollout (`backend/src/simulation/rollout.py`)  
+**Status:** Aprovado para Implementação pela Equipe  
+**Módulos Pertencentes:** 
+- **Módulo de Entrada:** Doc 01 (`backend/src/simulation/macro_flow.py`)
+- **Módulo de Saída & Circulação:** Doc 03 (`backend/src/simulation/markov_circulation.py`)
+- **Orquestrador Temporal:** Motor de Rollout (`backend/src/simulation/rollout.py`)  
 **Contexto Institucional:** UNIFACS — Iniciação Científica (IC) — Gêmeo Digital IoT Pelourinho  
-**Data:** Outubro de 2026  
+**Data:** 31 de Outubro de 2026  
 
 ---
 
-## 📌 1. Motivação e Diagnóstico do Estado Atual
+## 📌 1. Visão Geral da Arquitetura de Entrada e Saída
 
-### 1.1. Diagnóstico do Código Atual
-Na versão atual do código (`macro_flow.py` v2.0):
-* A curva circadiana de influxo $N_{\text{bairro}}(t)$ calcula a hora do dia via módulo simples:
-  $$h(t) = t \pmod{24}$$
-* O conjunto de picos trimodais padrão (`DEFAULT_TRIMODAL_PEAKS`: 09h30, 12h30, 16h48) é fixo e aplicado **indistintamente** para qualquer dia.
-* No motor de rollout (`rollout.py`), a execução ocorre em um horizonte fechado de 24 horas de um dia genérico.
-* **Problema:** Uma terça-feira de expediente comercial tem uma dinâmica urbana completamente diferente de um sábado à noite ou de um domingo pela manhã no Pelourinho.
+A simulação de pedestres do Pelourinho opera como um balanço hidrodinâmico contínuo entre **o que entra** e **o que sai**:
+
+```mermaid
+flowchart LR
+    subgraph Entrada["MÓDULO DE ENTRADA (Doc 01)"]
+        direction TB
+        E1["Relógio Circadiano h(t)"]
+        E2["M Picos Modulares (τ, σ, w)\n• Configurável por Simulação\n• Presets: Útil, Sábado, Domingo"]
+        E3["Taxa de Influxo nos Portões:\nΦ_in,g(t) = w_g × ΔN_bairro(t)"]
+        E1 --> E2 --> E3
+    end
+
+    subgraph Orquestrador["ORQUESTRADOR DE ROLLOUT (rollout.py)"]
+        direction TB
+        R1["Estado Atual nos Nós N(t)"]
+        R2["Balanço: N(t+1) = P^T N(t) + Φ_in - N_egress"]
+        R3["Suporte a 7 Dias Contínuos (168h)"]
+        R1 --> R2 --> R3
+    end
+
+    subgraph Saida["MÓDULO DE SAÍDA E CIRCULAÇÃO (Doc 03)"]
+        direction TB
+        S1["Classificação de POIs:\nGATE, COMERCIO, RELIGIOSO, CULTURAL"]
+        S2["Atratividade Dinâmica α_j(t, Dia)\n(Ex: Igreja de manhã no Domingo, Bares à noite no Sábado)"]
+        S3["Vetor de Evasão nos Portões:\nN_egress,g(t) = N_g(t) × P_g,egress(t)"]
+        S1 --> S2 --> S3
+    end
+
+    E3 -->|Novos Ingressos| R2
+    R1 -->|População Circulante| S2
+    S3 -->|Pedestres Evacuados| R2
+```
 
 ---
 
-## 🏛️ 2. Fundamentação Urbana no Pelourinho
+## 🚪 PARTE 1: Módulo de Entrada (Doc 01 — `macro_flow.py`)
 
-O Centro Histórico de Salvador apresenta três regimes semanais bem demarcados:
+### 1.1. Picos Modulares Abertos ($M$ Picos Customizáveis)
+Em vez de travar o código em uma curva fixa, o cálculo populacional suporta **qualquer quantidade $M$ de picos** definida na simulação:
 
-1. **Dias Úteis (Segunda a Sexta):**
-   * **Fluxo Operacional e Administrativo:** Abertura dos serviços públicos e comércio matinal (08h00 - 09h00), forte concentração no horário de almoço na Praça da Sé e Terreiro (12h00 - 13h30), e pico de retorno/comércio vespertino (17h00 - 18h30).
-   * **Noite Típica:** Movimentação moderada após 20h00, exceto às terças-feiras (Terça da Bênção / Olodum).
+$$N_{\text{bairro}}(t) = \gamma \cdot \left[ N_{\min} + \sum_{m=1}^{M} A_m \cdot \exp\left( -\frac{(h(t) - \tau_m)^2}{2\sigma_m^2} \right) \right]$$
 
-2. **Sábado (Ritmo Híbrido & Notívago):**
-   * **Manhã Comercial:** Comércio intenso e feirantes na transição da Baixa dos Sapateiros para o Pelourinho (10h00 - 12h00).
-   * **Tarde Turística Plena:** Grande afluência de visitantes regionais e interestaduais (14h00 - 18h00).
-   * **Noite Cultural Estendida:** Bares, restaurantes e palcos dos largos (Largo do Pelourinho, Quincas Berro d'Água, Pedro Archanjo) mantêm o ápice populacional até as **22h30 - 23h30**, com queda suave na madrugada.
+Onde cada pico $m$ possui três parâmetros configuráveis pelo usuário:
+1. $\tau_m$ (tau): Horário de ápice em horas fracionárias (ex: $12.5 = 12\text{h}30$).
+2. $\sigma_m$ (sigma): Dispersão temporal em horas (largura da onda).
+3. $w_m$ (weight): Peso relativo do pico em $[0.0, 1.0]$, onde a amplitude é $A_m = w_m \cdot (N_{\max} - N_{\min})$.
+   * *Ajuste por Simulação:* O operador pode calibrar o peso do pico máximo para $1.0$ caso queira que o pico toque o teto de $N_{\max}$.
 
-3. **Domingo (Turismo Contemplativo & Religioso):**
-   * **Manhã Sacra:** Missas com atabaques na Igreja de Nossa Senhora do Rosário dos Pretos e celebrações na Igreja de São Francisco (09h00 - 11h30).
-   * **Almoço e Tarde Turística:** Ápice familiar no pôr do sol da Praça da Sé e Mirante da Misericórdia (15h30 - 18h00).
-   * **Encerramento Precoce:** Desaceleração rápida após as 19h30; às 21h00 as ruas já se encontram com fluxo próximo ao piso basal $N_{\min}$.
+### 1.2. Presets Padrão por Dia da Semana
+O sistema oferece perfis padrão baseados na realidade de Salvador, permitindo override:
+
+* **Dias Úteis (Segunda a Sexta):**
+  * Piso Basal: $N_{\min} = 15$, Lotação de Referência: $N_{\max} = 300$.
+  * Pico 1 (Almoço executivo/comércio): $\tau_1 = 12.5\text{h}$, $\sigma_1 = 1.2\text{h}$, $w_1 = 0.65$.
+  * Pico 2 (Saída de trabalho / happy hour / turismo): $\tau_2 = 17.2\text{h}$, $\sigma_2 = 1.8\text{h}$, $w_2 = 0.90$.
+* **Sábado (Ritmo Comercial & Noite Prolongada):**
+  * Piso Basal: $N_{\min} = 25$, Lotação de Referência: $N_{\max} = 420$.
+  * Pico 1 (Feira e compras na Baixa dos Sapateiros): $\tau_1 = 10.5\text{h}$, $\sigma_1 = 1.5\text{h}$, $w_1 = 0.50$.
+  * Pico 2 (Tarde turística e mirantes): $\tau_2 = 16.0\text{h}$, $\sigma_2 = 1.8\text{h}$, $w_2 = 0.75$.
+  * Pico 3 (Noite cultural, bares e largos com música): $\tau_3 = 21.5\text{h}$, $\sigma_3 = 2.2\text{h}$, $w_3 = 0.95$.
+* **Domingo (Missas & Contemplação Familiar):**
+  * Piso Basal: $N_{\min} = 10$, Lotação de Referência: $N_{\max} = 320$.
+  * Pico 1 (Missa cantada no Rosário dos Pretos / São Francisco): $\tau_1 = 10.0\text{h}$, $\sigma_1 = 1.2\text{h}$, $w_1 = 0.70$.
+  * Pico 2 (Passeio da tarde / Pôr do sol na Sé): $\tau_2 = 16.0\text{h}$, $\sigma_2 = 1.5\text{h}$, $w_2 = 0.85$.
+  * Desaceleração noturna acentuada após as 19h30.
 
 ---
 
-## 🧮 3. Especificação Matemática
+## 🚪 PARTE 2: Módulo de Saída & Circulação (Doc 03 — `markov_circulation.py`)
 
-### 3.1. Classificação do Tipo de Dia
-Seja $d \in \{0, 1, 2, 3, 4, 5, 6\}$ o dia da semana no padrão ISO (0 = Segunda-feira, 6 = Domingo):
+### 2.1. Tipagem Semântica dos Pontos de Interesse (POIs)
+Cada nó do grafo urbano do Pelourinho recebe uma categoria urbana formal:
+* `GATE`: Portões externos de borda (Elevador Lacerda, Praça da Sé, Ladeira do Carmo) — únicos com probabilidade de saída ($Egress > 0$).
+* `COMERCIO`: Lojas de artesanato, alfaiatarias, comércio popular da Baixa dos Sapateiros.
+* `RELIGIOSO`: Igreja N. Sra. do Rosário dos Pretos, Catedral Basílica, Igreja de São Francisco.
+* `CULTURAL`: Largos centrais (Terreiro de Jesus, Largo do Pelourinho, Quincas Berro d'Água, Pedro Archanjo).
 
-$$\text{TipoDia}(d) = \begin{cases} 
-\text{WEEKDAY} & \text{se } d \in \{0, 1, 2, 3, 4\} \\
-\text{SATURDAY} & \text{se } d = 5 \\
-\text{SUNDAY} & \text{se } d = 6 
-\end{cases}$$
+### 2.2. Atratividade Gravitacional Dinâmica $\alpha_j(t, \text{Dia})$
+A matriz de probabilidade de circulação $P_{ij}$ calcula a atração para o nó $j$ segundo a Lei Gravitacional:
 
-### 3.2. Picos Circadianos por Tipo de Dia
+$$A_j(t) = \alpha_j(t, \text{Dia}) \cdot e^{-\lambda_d \cdot d_{ij}}$$
 
-Para o regime Trimodal ($m \in \{1, 2, 3\}$):
-$$N_{\text{bairro}}(t, d) = \gamma \cdot \left[ N_{\min}(d) + \sum_{m=1}^{3} A_m(d) \cdot \exp\left( -\frac{(h(t) - \tau_m(d))^2}{2\sigma_m(d)^2} \right) \right]$$
+A atratividade $\alpha_j$ varia em função do tipo de nó, da hora do dia e do dia da semana:
 
-#### Calibração Sugerida de Parâmetros:
-
-| Parâmetro | Dias Úteis (Seg - Sex) | Sábado | Domingo |
+| Categoria do Nó | Dias Úteis (Seg - Sex) | Sábado | Domingo |
 | :--- | :--- | :--- | :--- |
-| **Piso Basal ($N_{\min}$)** | $15$ pessoas | $25$ pessoas | $10$ pessoas |
-| **Capacidade Pico ($N_{\max}$)** | $300$ pessoas | $420$ pessoas | $320$ pessoas |
-| **Pico 1 ($\tau_1, \sigma_1, w_1$)** | $08.5\text{h}$, $\sigma=1.5\text{h}$, $w=0.40$ (Entrada trabalho/serviços) | $10.5\text{h}$, $\sigma=1.8\text{h}$, $w=0.50$ (Comércio e passeios) | $10.0\text{h}$, $\sigma=1.2\text{h}$, $w=0.60$ (Missas e visitas sacras) |
-| **Pico 2 ($\tau_2, \sigma_2, w_2$)** | $12.5\text{h}$, $\sigma=1.0\text{h}$, $w=0.60$ (Almoço executivo/popular) | $15.5\text{h}$, $\sigma=1.8\text{h}$, $w=0.75$ (Passeios da tarde) | $15.8\text{h}$, $\sigma=1.8\text{h}$, $w=0.85$ (Pôr do sol / atrativos) |
-| **Pico 3 ($\tau_3, \sigma_3, w_3$)** | $17.5\text{h}$, $\sigma=1.5\text{h}$, $w=0.70$ (Saída de expediente / happy hour) | $21.5\text{h}$, $\sigma=2.2\text{h}$, $w=0.95$ (Vida noturna e música) | $18.5\text{h}$, $\sigma=1.2\text{h}$, $w=0.40$ (Encerramento antecipado) |
+| **`COMERCIO`** | Alta de 10h às 17h ($\alpha = 2.0$) | Alta de 09h às 14h ($\alpha = 2.2$) | Quase nula o dia todo ($\alpha = 0.2$) |
+| **`RELIGIOSO`** | Moderada ($\alpha = 1.2$) | Moderada ($\alpha = 1.2$) | **Máxima de 09h às 12h** ($\alpha = 3.5$, missas) |
+| **`CULTURAL`** | Média de dia ($\alpha = 1.5$), cai à noite | Alta à tarde e **máxima à noite** ($\alpha = 3.0$ até 23h) | Forte à tarde no pôr do sol ($\alpha = 2.0$), cai cedo |
+| **`GATE` (Saída)** | Atrai forte a partir das 18h (saída) | Retenção interna alta; saída atrai tarde (após 22h) | Saída começa a atrair cedo (a partir das 19h) |
 
-### 3.3. Ciclo Intra-Mensal (Efeito Calendário Comercial / Quinzena)
-O poder de compra e visitação urbana no comércio local sofre um incremento cíclico associado aos dias de pagamento de salários (1º ao 5º dia útil do mês e dia 20 para adiantamentos):
+### 2.3. Cálculo Vetorial da Saída ($Egress$)
+Para os nós de portão externo $g \in \text{GATEs}$, o volume instantâneo de pedestres que deixam a cidade é:
 
-$$\phi_{\text{mes}}(dia\_do\_mes) = \begin{cases}
-1.15 & \text{se } dia\_do\_mes \in [1, 7] \quad (\text{Primeiro quinto útil}) \\
-1.08 & \text{se } dia\_do\_mes \in [18, 22] \quad (\text{Adiantamento quinzenal}) \\
-0.95 & \text{caso contrário} \quad (\text{Dias regulares})
-\end{cases}$$
-
-O volume global modulado torna-se:
-$$N_{\text{final}}(t, d, dia\_do\_mes) = N_{\text{bairro}}(t, d) \cdot \phi_{\text{mes}}(dia\_do\_mes)$$
+$$N_{\text{egress}, g}(t) = N_g(t) \cdot P_{g, \text{egress}}(t)$$
 
 ---
 
-## 🛠️ 4. Impactos Arquiteturais e Requisitos Técnicos
+## 🔄 PARTE 3: Orquestrador de Simulação Contínua (`rollout.py`)
 
-### 4.1. Alterações no `MacroFlowSimulator` (`macro_flow.py`)
-1. Adicionar parâmetro opcional `day_of_week: int = 0` (0..6) em `calculate_macro_flow` e `calculate_multimodal_bairro_population`.
-2. Criar dicionário de calibração `DAY_OF_WEEK_PROFILES` mapeando os perfis acima.
-3. Se `day_of_week` não for informado, utilizar a data do sistema operacional via `datetime.now().weekday()`.
+O motor de Rollout une a Entrada e a Saída a cada passo de tempo $\Delta t$:
 
-### 4.2. Suporte à Simulação Multidiária (`rollout.py`)
-1. Implementar método `run_multi_day_batch(days=7, start_weekday=0, step_minutes=30.0)`:
-   * Mantém o vetor de ocupação residual dos nós de 23h59 para 00h00 do dia seguinte.
-   * Alterna dinamicamente a curva circadiana base conforme o dia da semana avança.
-2. Adicionar no `RolloutStep` o metadado `day_index` e `weekday_name` ("Segunda", "Terça", etc.).
-
-### 4.3. Atualização no Dashboard Web (`simulacao/app.py` e `sidebar.py`)
-1. Adicionar seletor de dia da semana na barra lateral:
-   * Opções: `["Segunda a Sexta (Útil)", "Sábado", "Domingo", "Semana Completa (7 Dias Contínuos)"]`.
-2. No gráfico da linha do tempo, permitir visualização com divisores verticais de transição de dias.
+1. **Atualização de Estado:**
+   $$N_j(t + \Delta t) = \sum_{i=1}^J N_i(t) \cdot P_{ij}(t) + \Phi_{\text{in}, j}(t) - N_{\text{egress}, j}(t)$$
+2. **Ciclo Multidiário (7 Dias / 168 Horas):**
+   * Ao atingir $t = 24.0$, o relógio reseta para $t = 0.0$ e o contador de dia avança ($d \to (d + 1) \pmod 7$).
+   * O vetor de pedestres $N_j$ da meia-noite é **estritamente preservado** como estado inicial do dia seguinte, garantindo continuidade física perfeita.
 
 ---
 
-## ✅ 5. Critérios de Aceitação (DoD)
-- [ ] Testes unitários validando que Sábado possui ápice noturno após as 21h enquanto Domingo decai após as 19h.
-- [ ] Continuidade estrita de conservação de fluxo na transição entre dias consecutivos no rollout de 7 dias (sem saltos de descontinuidade populacional em $t = 24.0$).
-- [ ] Cobertura de testes $\ge 90\%$ nas novas funções de perfil semanal.
+## 🛠️ 4. Guia Rápido de Arquivos para o Grupo de IC
+
+| Arquivo no Repositório | Responsabilidade da Mudança | O que Codificar |
+| :--- | :--- | :--- |
+| `backend/src/simulation/schemas.py` | Contratos de Dados (Pydantic) | Adicionar `CircadianPeakConfig` aberto e campo `poi_type` enum (`GATE`, `COMERCIO`, `RELIGIOSO`, `CULTURAL`). |
+| `backend/src/simulation/macro_flow.py` | **Módulo de Entrada** | Permitir receber lista dinâmica de picos por simulação e mapear presets de dia da semana (`WEEKDAY`, `SATURDAY`, `SUNDAY`). |
+| `backend/src/simulation/markov_circulation.py` | **Módulo de Saída** | Ajustar o cálculo de $\alpha_j(t)$ para consumir a tabela de tipos de POIs em função do dia. |
+| `backend/src/simulation/rollout.py` | **Orquestrador** | Implementar `run_multi_day_batch(days=7)` preservando a população na virada dos dias. |
+| `backend/tests/test_macro_flow.py` | Testes de Entrada | Testar simulação com 1, 2, 3 e 5 picos customizados. |
+| `backend/tests/test_rollout.py` | Testes de Integração | Testar 7 dias contínuos (336 passos de 30 min) sem descontinuidade. |

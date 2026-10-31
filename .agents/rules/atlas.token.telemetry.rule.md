@@ -8,11 +8,12 @@ Ao final de TODA resposta substantiva emitida pelo Supervisor Local ou pelo Atla
 
 > 🚫 **PROIBIÇÃO DE OMISSÃO**: O fato de ter criado um artefato, submetido um plano de `/plan` ou executado a sabatina do `/conselho` NUNCA autoriza o modelo a omitir o rodapé. A mensagem de aviso no chat DEVE conter o bloco de telemetria.
 
-## 3. Formato Canônico do Rodapé (Padrão Híbrido v2.1: FinOps + Context Health)
+## 3. Formato Canônico do Rodapé (Padrão Híbrido v2.3: FinOps + Context Health)
 ```markdown
 ---
 🪙 **Telemetria de Tokens**:
-  • 📥 **Entrada**: ~{X} tokens | 📤 **Saída**: ~{Y} tokens | ⏱️ **Latência**: ~{Z}s | 💵 **Custo Est.**: ~${W} USD  
+  • 📥 **Entrada**: ~{X} tokens | 📤 **Saída**: ~{Y} tokens | ⏱️ **Latência**: ~{Z}s  
+  • 💵 **Custo Turno**: ~${W} USD | 💰 **Custo Acumulado**: ~${Total} USD  
   • 📈 **Janela Acumulada**: ~{K}k tokens | Persistência: English (Dense YAML)  
 📊 **Janela de Contexto**:  
   • 💬 **Chat Atual**: [Turno {N}] {🟢 Leve (<25k tokens — seguro continuar) / 🟡 Atenção (25k-60k tokens — planeje fechamento) / 🔴 Saturado (>60k tokens — novo chat recomendado)}  

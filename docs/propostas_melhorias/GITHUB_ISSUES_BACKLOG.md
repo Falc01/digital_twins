@@ -22,17 +22,22 @@ Além disso, o motor de rollout (`rollout.py`) executa apenas ciclos de 24 horas
 - Consulte o documento completo em: [`docs/propostas_melhorias/RFC-001_dias_da_semana_e_ciclos_temporais.md`](file:///docs/propostas_melhorias/RFC-001_dias_da_semana_e_ciclos_temporais.md)
 
 #### 📋 Tarefas Técnicas de Implementação
-- [ ] **Modelagem no `macro_flow.py`**:
-  - [ ] Implementar enum/tipo `DayType` (`WEEKDAY`, `SATURDAY`, `SUNDAY`).
-  - [ ] Criar constante `DAY_OF_WEEK_PROFILES` com picos específicos ($\tau_m, \sigma_m, w_m$) e capacidades ($N_{\min}, N_{\max}$) para cada categoria.
+- [ ] **Módulo de Entrada (`backend/src/simulation/macro_flow.py`)**:
+  - [ ] Permitir receber lista arbitrária de $M$ picos com $(\tau, \sigma, w)$ configuráveis por simulação.
+  - [ ] Criar presets padrão calibrados para `WEEKDAY`, `SATURDAY` e `SUNDAY`.
   - [ ] Adicionar suporte a `day_of_week` no cálculo analítico da população do bairro $N_{\text{bairro}}(t, d)$.
-- [ ] **Rollout Multidiário no `rollout.py`**:
+- [ ] **Módulo de Saída & Circulação (`backend/src/simulation/markov_circulation.py`)**:
+  - [ ] Categorizar nós urbanos em `poi_type`: `GATE`, `COMERCIO`, `RELIGIOSO`, `CULTURAL`.
+  - [ ] Implementar atratividade gravitacional $\alpha_j(t, \text{dia})$ (ex: missas atraem no domingo de manhã; bares retêm pessoas no sábado à noite, retardando o Egress).
+  - [ ] Modular a probabilidade de evasão nos portões ($Egress$) em conformidade com o perfil semanal.
+- [ ] **Rollout Multidiário (`backend/src/simulation/rollout.py`)**:
   - [ ] Adicionar método `run_multi_day_batch(days=7, start_weekday=0, step_minutes=30.0)` preservando o estado residual dos nós na virada da meia-noite ($t=24.0 \to t=0.0$).
   - [ ] Adicionar campos `day_index` e `weekday_name` nos metadados do `RolloutStep`.
 - [ ] **Interface Web no Streamlit (`simulacao/`)**:
   - [ ] Adicionar filtro de dia da semana na barra lateral (`sidebar.py`).
   - [ ] Exibir linhas verticais tracejadas de troca de dia no gráfico de linha temporal (`timeline_view.py`).
-- [ ] **Testes Automatizados (`backend/tests/test_macro_flow.py` e `test_rollout.py`)**:
+- [ ] **Testes Automatizados (`backend/tests/test_macro_flow.py`, `test_markov_circulation.py` e `test_rollout.py`)**:
+  - [ ] Testar simulação com 1, 2, 3 e 5 picos customizados.
   - [ ] Testar se Sábado atinge ápice após 21h00 enquanto Domingo desacelera após 19h00.
   - [ ] Garantir continuidade e conservação de fluxo na virada de 7 dias consecutivos.
 
