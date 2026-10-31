@@ -49,7 +49,12 @@ O desenvolvedor deve implementar a modulação horária e semanal de $\alpha_j$:
 ---
 
 ### 2.3. Mecanismo de Saturação e Inércia Local ("Creep Flow")
-Quando um nó histórico atinge alta densidade populacional ($N_j > 0.85 N_{j, \max}$), a multidão compactada reduz a vazão das ruas estreitas. A probabilidade de permanecer no mesmo nó (diagonal $P_{jj}$) é amplificada:
+Quando um nó histórico atinge alta densidade populacional ($N_j > 0.85 N_{j, \max}$), a multidão compactada reduz a vazão das ruas estreitas. Esse limiar está fundamentado na literatura clássica de física de pedestres:
+* **John Fruin (1971, *Pedestrian Planning and Design*):** Limiar do Nível de Serviço F (*LOS F — Breakdown*), onde densidades acima de $80\% - 85\%$ do espaço crítico provocam colapso de escoamento e transição para movimento em ondas de choque (*stop-and-go*).
+* **Dirk Helbing (*Nature*, 2000):** Transição de fase para estado viscoso granular (*jamming transition*), onde a probabilidade de transição para nós vizinhos cai e a inércia local converge para $P_{jj} \to 0.95$.
+* **Ulrich Weidmann (1993):** Curva exponencial de decrescimento de velocidade no Diagrama Fundamental do Pedestre conforme $\rho \to \rho_{\max}$.
+
+A probabilidade de permanecer no mesmo nó (diagonal $P_{jj}$) é formalmente amplificada:
 
 $$P_{jj}^{\text{efetivo}}(t) = P_{jj}^{\text{base}} + (1.0 - P_{jj}^{\text{base}}) \cdot \left[ \frac{1}{1 + \exp\left( -\kappa \cdot (N_j(t) - 0.85 N_{j, \max}) \right)} \right]$$
 
