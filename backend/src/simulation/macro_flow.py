@@ -14,7 +14,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from src.simulation.schemas import (
@@ -30,7 +30,7 @@ logger = logging.getLogger("simulation.macro_flow")
 
 @dataclass(frozen=True)
 class CircadianPeak:
-    """Parâmetros de um pico circadiano em uma mistura multimodal (Doc 01 v2.0)."""
+    """Parâmetros de um pico circadiano em uma mistura multimodal (Doc 01 v2.0 e Doc 01-A)."""
     tau: float
     sigma: float
     weight: float = 1.0
@@ -43,6 +43,137 @@ DEFAULT_TRIMODAL_PEAKS = (
     (12.5, 1.2, 0.55),  # Pico 2: Almoço e gastronomia histórica (12h30)
     (16.8, 2.2, 0.90),  # Pico 3: Ápice turístico e cultural / pôr do sol (16h48)
 )
+
+
+# -----------------------------------------------------------------------------
+# Doc 01-A: Presets Nativos por Dia da Semana (WEEKDAY, SATURDAY, SUNDAY)
+# -----------------------------------------------------------------------------
+DAY_OF_WEEK_PROFILES: Dict[str, Dict[str, Any]] = {
+    "WEEKDAY": {
+        "name": "Dias Úteis (Segunda a Sexta)",
+        "N_min": 15,
+        "N_max": 300,
+        "peaks": [
+            CircadianPeak(tau=12.5, sigma=1.2, weight=0.65),  # Almoço / Serviços
+            CircadianPeak(tau=17.2, sigma=1.8, weight=0.90),  # Saída do Trabalho / Comércio
+        ],
+    },
+    "SATURDAY": {
+        "name": "Sábado",
+        "N_min": 25,
+        "N_max": 420,
+        "peaks": [
+            CircadianPeak(tau=10.5, sigma=1.5, weight=0.50),  # Feira e Comércio matinal
+            CircadianPeak(tau=16.0, sigma=1.8, weight=0.75),  # Passeio Turístico da Tarde
+            CircadianPeak(tau=21.5, sigma=2.2, weight=0.95),  # Noite Cultural / Bares
+        ],
+    },
+    "SUNDAY": {
+        "name": "Domingo",
+        "N_min": 10,
+        "N_max": 320,
+        "peaks": [
+            CircadianPeak(tau=10.0, sigma=1.2, weight=0.70),  # Missa do Rosário / São Francisco
+            CircadianPeak(tau=16.0, sigma=1.5, weight=0.85),  # Pôr do Sol na Sé e Mirantes
+        ],
+    },
+}
+
+
+def get_day_preset(day_of_week: Union[int, str]) -> Dict[str, Any]:
+    """
+    Retorna o perfil calibrado para o dia da semana (Doc 01-A).
+    
+    Args:
+        day_of_week: Inteiro (0=Segunda, ..., 4=Sexta, 5=Sábado, 6=Domingo) ou
+                     string ('WEEKDAY', 'SATURDAY', 'SUNDAY', 'UTIL', 'SABADO', 'DOMINGO').
+                     
+    Returns:
+        Dict contendo 'name', 'N_min', 'N_max' e 'peaks'.
+    """
+    if isinstance(day_of_week, int):
+        if 0 <= day_of_week <= 4:
+            return DAY_OF_WEEK_PROFILES["WEEKDAY"]
+        elif day_of_week == 5:
+            return DAY_OF_WEEK_PROFILES["SATURDAY"]
+        elif day_of_week == 6:
+            return DAY_OF_WEEK_PROFILES["SUNDAY"]
+    elif isinstance(day_of_week, str):
+        key = day_of_week.upper().strip()
+        if key in ("WEEKDAY", "UTIL", "DIAS_UTEIS", "SEMANA"):
+            return DAY_OF_WEEK_PROFILES["WEEKDAY"]
+        if key in ("SATURDAY", "SABADO"):
+            return DAY_OF_WEEK_PROFILES["SATURDAY"]
+        if key in ("SUNDAY", "DOMINGO"):
+            return DAY_OF_WEEK_PROFILES["SUNDAY"]
+        days_map = {
+            "MONDAY": "WEEKDAY", "SEGUNDA": "WEEKDAY",
+            "TUESDAY": "WEEKDAY", "TERCA": "WEEKDAY",
+            "WEDNESDAY": "WEEKDAY", "QUARTA": "WEEKDAY",
+            "THURSDAY": "WEEKDAY", "QUINTA": "WEEKDAY",
+            "FRIDAY": "WEEKDAY", "SEXTA": "WEEKDAY",
+        }
+        if key in days_map:
+            return DAY_OF_WEEK_PROFILES[days_map[key]]
+    return DAY_OF_WEEK_PROFILES["WEEKDAY"]
+
+
+# -----------------------------------------------------------------------------
+# Doc 01-B: Sazonalidade das 4 Estações e Fatores Climáticos
+# -----------------------------------------------------------------------------
+SEASON_FACTORS: Dict[str, float] = {
+    "SUMMER": 1.50,
+    "VERAO": 1.50,
+    "SPRING": 1.10,
+    "PRIMAVERA": 1.10,
+    "AUTUMN": 0.90,
+    "OUTONO": 0.90,
+    "WINTER": 0.75,
+    "INVERNO": 0.75,
+}
+
+WEATHER_FACTORS: Dict[str, float] = {
+    "SUNNY": 1.00,
+    "SOL": 1.00,
+    "LIGHT_RAIN": 0.80,
+    "CHUVA_FRACA": 0.80,
+    "GAROA": 0.80,
+    "HEAVY_RAIN": 0.40,
+    "TEMPESTADE": 0.40,
+    "CHUVA_FORTE": 0.40,
+}
+
+
+def calculate_gamma_seasonality(
+    season: Optional[str] = None,
+    weather: Optional[str] = None,
+    manual_gamma: float = 1.0,
+) -> float:
+    """
+    Calcula o multiplicador gamma efetivo integrando sazonalidade, clima e override manual (Doc 01-B).
+    
+    Formula: gamma_efetivo = gamma_manual * gamma_estacao * omega_clima
+    
+    Args:
+        season: Estação do ano ('SUMMER', 'SPRING', 'AUTUMN', 'WINTER', ou PT-BR).
+        weather: Intempérie climática ('SUNNY', 'LIGHT_RAIN', 'HEAVY_RAIN', ou PT-BR).
+        manual_gamma: Ajuste fino do gestor (padrão: 1.0).
+        
+    Returns:
+        float: Multiplicador global gamma_efetivo >= 0.0.
+    """
+    gamma_season = 1.0
+    if season:
+        s_key = season.upper().strip()
+        gamma_season = SEASON_FACTORS.get(s_key, 1.0)
+
+    omega_weather = 1.0
+    if weather:
+        w_key = weather.upper().strip()
+        omega_weather = WEATHER_FACTORS.get(w_key, 1.0)
+
+    effective_gamma = float(manual_gamma) * float(gamma_season) * float(omega_weather)
+    return max(0.0, float(effective_gamma))
 
 
 def calculate_circadian_hour(current_time_hours: float) -> float:
@@ -143,38 +274,72 @@ def calculate_multimodal_bairro_population(
     regime: str = "trimodal",
     fourier_harmonics: Optional[Sequence[Tuple[float, float]]] = None,
     fourier_beta0: Optional[float] = None,
+    day_of_week: Optional[Union[int, str]] = None,
+    season: Optional[str] = None,
+    weather: Optional[str] = None,
+    manual_gamma: Optional[float] = None,
 ) -> BairroPopulation:
     """
     Calcula o volume global de pedestres no Pelourinho N_bairro(t) e a taxa diferencial
-    de novos ingressos ΔN sob regimes multimodais (Doc 01 v2.0 - Itens 2 e 3).
+    de novos ingressos ΔN sob regimes multimodais e presets de dias da semana (Doc 01 v2.0 e Doc 01-A/B).
 
-    Regimes suportados:
-      - 'trimodal' (Regime A): Mistura Trimodal Urbana com três picos calibrados para Salvador:
-          * Pico 1 (09h30, tau=9.5, sigma=1.8h, A1 = 0.35 * (N_max - N_min))
-          * Pico 2 (12h30, tau=12.5, sigma=1.2h, A2 = 0.55 * (N_max - N_min))
-          * Pico 3 (16h48, tau=16.8, sigma=2.2h, A3 = 0.90 * (N_max - N_min))
+    Regimes e Presets suportados:
+      - 'weekday' / 'util': Preset calibrado para dias úteis (2 picos).
+      - 'saturday' / 'sabado': Preset calibrado para sábado (3 picos, turismo/noite).
+      - 'sunday' / 'domingo': Preset calibrado para domingo (2 picos, sacro/mirantes).
+      - 'trimodal' (Regime A): Mistura Trimodal Urbana padrão de Salvador.
       - 'fourier' (Regime B): Decomposição harmônica espectral contínua com K=3 harmônicos.
 
     Args:
         current_time_hours (float): Tempo contínuo acumulado em horas (t >= 0).
         N_max (int): Capacidade de pico de circulação (padrão: 300).
         N_min (int): Piso basal residual da madrugada (padrão: 15).
-        gamma_seasonality (float): Multiplicador sazonal (ex: 1.0 útil, 1.5 verão, 3.5 carnaval).
+        gamma_seasonality (float): Multiplicador sazonal basal (padrão: 1.0).
         step_minutes (float): Intervalo temporal Δt do ciclo em minutos (padrão: 5.0).
-        peaks: Lista de picos para Regime A (se None, usa DEFAULT_TRIMODAL_PEAKS).
-        regime (str): 'trimodal' ou 'fourier'.
+        peaks: Lista de picos arbitrária (M picos com tau, sigma, peso/amplitude).
+        regime (str): 'trimodal', 'fourier', 'weekday', 'saturday', 'sunday', etc.
         fourier_harmonics: Lista de tuplas (a_k, b_k) para k in {1, 2, 3}.
         fourier_beta0: Termo médio independente beta_0 para Fourier.
+        day_of_week: Dia da semana (0..6 ou WEEKDAY, SATURDAY, SUNDAY).
+        season: Estação do ano (SUMMER, SPRING, AUTUMN, WINTER).
+        weather: Fator climático pluviométrico (SUNNY, LIGHT_RAIN, HEAVY_RAIN).
+        manual_gamma: Override manual de gamma pelo gestor.
 
     Returns:
         BairroPopulation: Tupla enriquecida com (N_bairro, h(t), delta_N, rate_per_minute, step_minutes, slope).
     """
+    # Integração Doc 01-B: Sazonalidade e Clima
+    if season is not None or weather is not None:
+        base_g = manual_gamma if manual_gamma is not None else gamma_seasonality
+        gamma_seasonality = calculate_gamma_seasonality(
+            season=season, weather=weather, manual_gamma=base_g
+        )
+    elif manual_gamma is not None:
+        gamma_seasonality = float(manual_gamma)
+
+    regime_lower = (regime or "trimodal").lower().strip()
+
+    # Integração Doc 01-A: Presets por Dia da Semana se peaks não foi fornecido explicitamente
+    if peaks is None:
+        if day_of_week is not None:
+            preset = get_day_preset(day_of_week)
+            peaks = preset["peaks"]
+            if N_max == 300 and "N_max" in preset:
+                N_max = preset["N_max"]
+            if N_min == 15 and "N_min" in preset:
+                N_min = preset["N_min"]
+        elif regime_lower in ("weekday", "saturday", "sunday", "util", "sabado", "domingo", "semana"):
+            preset = get_day_preset(regime_lower)
+            peaks = preset["peaks"]
+            if N_max == 300 and "N_max" in preset:
+                N_max = preset["N_max"]
+            if N_min == 15 and "N_min" in preset:
+                N_min = preset["N_min"]
+
     h_t = calculate_circadian_hour(current_time_hours)
     dt_hours = step_minutes / 60.0
     h_next = calculate_circadian_hour(current_time_hours + dt_hours)
     span = float(max(0, N_max - N_min))
-
-    regime_lower = (regime or "trimodal").lower().strip()
 
     if regime_lower == "fourier":
         # Regime B: Decomposição Harmônica de Fourier K=3
@@ -281,6 +446,10 @@ def calculate_bairro_population(
     peaks: Optional[Sequence[Union[dict, Tuple[float, float, float], CircadianPeak]]] = None,
     fourier_harmonics: Optional[Sequence[Tuple[float, float]]] = None,
     fourier_beta0: Optional[float] = None,
+    day_of_week: Optional[Union[int, str]] = None,
+    season: Optional[str] = None,
+    weather: Optional[str] = None,
+    manual_gamma: Optional[float] = None,
 ) -> BairroPopulation:
     """
     Calcula o volume global diário de pedestres no Pelourinho N_bairro(t)
@@ -288,9 +457,25 @@ def calculate_bairro_population(
     de novos ingressos no ciclo Δt (Item 1 e 2).
 
     Mantém 100% de compatibilidade retroativa com chamadas unimodais (v1.0),
-    enquanto suporta delegação transparente para regimes multimodais (v2.0).
+    enquanto suporta delegação transparente para regimes multimodais (v2.0 e Doc 01-A/B).
     """
-    if regime is not None and regime.lower().strip() in ("trimodal", "fourier", "multimodal"):
+    # Se estação ou clima foram fornecidos, avalia o multiplicador de sazonalidade
+    if season is not None or weather is not None:
+        base_g = manual_gamma if manual_gamma is not None else gamma_seasonality
+        gamma_seasonality = calculate_gamma_seasonality(
+            season=season, weather=weather, manual_gamma=base_g
+        )
+    elif manual_gamma is not None:
+        gamma_seasonality = float(manual_gamma)
+
+    regime_norm = (regime or "").lower().strip()
+    is_multimodal = (
+        regime_norm in ("trimodal", "fourier", "multimodal", "weekday", "saturday", "sunday", "util", "sabado", "domingo")
+        or (day_of_week is not None and regime_norm not in ("unimodal", "gaussian"))
+        or (peaks is not None and len(peaks) > 1)
+    )
+
+    if is_multimodal:
         return calculate_multimodal_bairro_population(
             current_time_hours=current_time_hours,
             N_max=N_max,
@@ -298,20 +483,13 @@ def calculate_bairro_population(
             gamma_seasonality=gamma_seasonality,
             step_minutes=step_minutes,
             peaks=peaks,
-            regime="trimodal" if regime.lower().strip() == "multimodal" else regime,
+            regime="trimodal" if regime_norm in ("multimodal", "") else regime_norm,
             fourier_harmonics=fourier_harmonics,
             fourier_beta0=fourier_beta0,
-        )
-
-    if peaks is not None and len(peaks) > 1:
-        return calculate_multimodal_bairro_population(
-            current_time_hours=current_time_hours,
-            N_max=N_max,
-            N_min=N_min,
-            gamma_seasonality=gamma_seasonality,
-            step_minutes=step_minutes,
-            peaks=peaks,
-            regime="trimodal",
+            day_of_week=day_of_week,
+            season=season,
+            weather=weather,
+            manual_gamma=manual_gamma,
         )
 
     h_t = calculate_circadian_hour(current_time_hours)
@@ -634,6 +812,10 @@ class MacroFlowSimulator:
         gamma: float = 1.0,
         step_minutes: Optional[float] = None,
         regime: Optional[str] = None,
+        day_of_week: Optional[Union[int, str]] = None,
+        season: Optional[str] = None,
+        weather: Optional[str] = None,
+        manual_gamma: Optional[float] = None,
     ) -> MacroFlowResult:
         """Executa um ciclo completo de cálculo analítico e diferencial em O(1) (RNF01, Itens 1 e 2)."""
         if t_hours is None:
@@ -642,6 +824,16 @@ class MacroFlowSimulator:
         dt_minutes = step_minutes if step_minutes is not None else getattr(self.config, "step_minutes", 5.0)
         h = calculate_circadian_hour(t_hours)
         active_regime = (regime or getattr(self.config, "regime", "unimodal")).lower().strip()
+        active_day = day_of_week if day_of_week is not None else getattr(self.config, "day_of_week", None)
+        active_season = season if season is not None else getattr(self.config, "season", None)
+        active_weather = weather if weather is not None else getattr(self.config, "weather", None)
+        active_manual_gamma = manual_gamma if manual_gamma is not None else getattr(self.config, "manual_gamma", None)
+
+        if active_season is not None or active_weather is not None:
+            base_g = active_manual_gamma if active_manual_gamma is not None else gamma
+            gamma = calculate_gamma_seasonality(season=active_season, weather=active_weather, manual_gamma=base_g)
+        elif active_manual_gamma is not None and active_manual_gamma != 1.0:
+            gamma = float(active_manual_gamma)
         
         pop = calculate_bairro_population(
             current_time_hours=t_hours,
@@ -655,6 +847,10 @@ class MacroFlowSimulator:
             peaks=getattr(self.config, "peaks", None),
             fourier_harmonics=getattr(self.config, "fourier_harmonics", None),
             fourier_beta0=getattr(self.config, "fourier_beta0", None),
+            day_of_week=active_day,
+            season=active_season,
+            weather=active_weather,
+            manual_gamma=active_manual_gamma,
         )
         N_bairro = pop.N_bairro
         delta_N = pop.delta_N
@@ -742,19 +938,35 @@ def calculate_macro_flow(
     step_minutes: Optional[float] = None,
     use_incremental: bool = False,
     regime: Optional[str] = None,
+    day_of_week: Optional[Union[int, str]] = None,
+    season: Optional[str] = None,
+    weather: Optional[str] = None,
+    manual_gamma: Optional[float] = None,
 ) -> MacroFlowResponse:
     """
-    Função principal do Subsistema de Macro-Fluxo (Doc 01).
+    Função principal do Subsistema de Macro-Fluxo (Doc 01, Doc 01-A e Doc 01-B).
     Recebe os parâmetros de entrada (Canais A, B, C) e calcula a distribuição de pessoas
     na rotina dos portões (Canal D), oferecendo tanto o volume global absoluto quanto
     o fluxo diferencial incremental de novos ingressos ΔN (Item 1 e 2), suportando
-    regimes unimodal (v1.0) e multimodal trimodal/Fourier (v2.0).
+    regimes unimodal (v1.0), multimodal trimodal/Fourier (v2.0) e presets de dias da semana.
     """
     if config is None:
         config = MacroFlowConfig()
         
     dt_minutes = step_minutes if step_minutes is not None else getattr(config, "step_minutes", 5.0)
     active_regime = (regime or getattr(config, "regime", "unimodal")).lower().strip()
+    active_day = day_of_week if day_of_week is not None else getattr(config, "day_of_week", None)
+    active_season = season if season is not None else getattr(config, "season", None)
+    active_weather = weather if weather is not None else getattr(config, "weather", None)
+    active_manual_gamma = manual_gamma if manual_gamma is not None else getattr(config, "manual_gamma", None)
+
+    if active_season is not None or active_weather is not None:
+        base_g = active_manual_gamma if active_manual_gamma is not None else gamma_seasonality
+        gamma_seasonality = calculate_gamma_seasonality(
+            season=active_season, weather=active_weather, manual_gamma=base_g
+        )
+    elif active_manual_gamma is not None and active_manual_gamma != 1.0:
+        gamma_seasonality = float(active_manual_gamma)
     
     pop = calculate_bairro_population(
         current_time_hours=current_time_hours,
@@ -768,6 +980,10 @@ def calculate_macro_flow(
         peaks=getattr(config, "peaks", None),
         fourier_harmonics=getattr(config, "fourier_harmonics", None),
         fourier_beta0=getattr(config, "fourier_beta0", None),
+        day_of_week=active_day,
+        season=active_season,
+        weather=active_weather,
+        manual_gamma=active_manual_gamma,
     )
     
     N_bairro = pop.N_bairro

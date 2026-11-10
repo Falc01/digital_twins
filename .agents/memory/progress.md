@@ -5,11 +5,17 @@
 - [x] Inicialização do Banco de Memória Viva em `.agents/memory/`
 - [x] Reestruturação completa da documentação técnica sob o Diátaxis Framework e escrita das ADRs (001, 002, 003)
 - [x] Commit e push da documentação para o repositório remoto (`origin/main`)
-- [x] **[CONCLUÍDO]** Pesquisa e formulação matemática completa de dados sintéticos de sensoriamento de pedestres em [`modelo_matematico_dados_sinteticos.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/modelo_matematico_dados_sinteticos.md)
-- [x] **[CONCLUÍDO]** Consolidação unificada dos trabalhos em [`framework_unificado_dados_sinteticos.md`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/framework_unificado_dados_sinteticos.md)
-- [x] **[CONCLUÍDO]** Apresentação Técnica em Reveal.js (`apresentacao/apresentacao_dados_sinteticos.html`) apresentada e aprovada pelo orientador e doutorando
-- [x] **[CONCLUÍDO]** Criação da Suíte Modular de Documentação Técnica em 6 Arquivos em [`docs/explanation/dados_sinteticos/`](file:///c:/Users/joaof/Documents/Unifacs/ICs/digital_twins/docs/explanation/dados_sinteticos/) contendo o Doc 00 Central de Ingestão e Barramento de Dados + os 5 Documentos Especializados com RFs, RNFs, equações cruas e contratos de importação/exportação
+- [x] **[CONCLUÍDO]** Pesquisa e formulação matemática completa de dados sintéticos de sensoriamento de pedestres
+- [x] **[CONCLUÍDO]** Consolidação unificada dos trabalhos em `framework_unificado_dados_sinteticos.md`
+- [x] **[CONCLUÍDO]** Apresentação Técnica em Reveal.js aprovada pelo orientador e doutorando
+- [x] **[CONCLUÍDO]** Criação da Suíte Modular de Documentação Técnica em 6 Arquivos (`docs/explanation/dados_sinteticos/`)
 - [x] **[CONCLUÍDO]** Commit e push de toda a suíte de documentação modular para o GitHub (`origin/main`)
-- [x] **[CONCLUÍDO]** Unificação e homologação completa do Subsistema de Macro-Fluxo Circadiano (Doc 01) em `backend/src/simulation/` (`macro_flow.py`, `schemas.py`, `cli_macro_flow.py`), rotas FastAPI (`routers/simulation.py`) e 20 testes unitários verdes em `backend/tests/test_macro_flow.py`
-- [ ] **[AGUARDANDO EQUIPE]** Colegas (Perrone / Daniel) puxarem a `main` e implementarem o Doc 02 (Injeção Dinâmica de Eventos e Atrações Culturais)
-- [ ] **[PRÓXIMO PASSO DO JOÃO]** Implementação do Doc 03 (Circulação Markoviana, POIs e Matriz de Transição) e integração com Doc 04/00
+- [x] **[CONCLUÍDO]** Unificação e homologação completa do Subsistema de Macro-Fluxo Circadiano (Doc 01) — 20 testes verdes
+- [x] **[CONCLUÍDO — 05/Nov/2026]** **Issue Doc01-A**: Picos Modulares Abertos + Presets por Dia da Semana implementados em `macro_flow.py` + 6 novos testes verdes
+- [x] **[CONCLUÍDO — 05/Nov/2026]** **Issue Doc01-B**: Sazonalidade (4 estações) + Fator Climático + Override Manual Gamma implementados em `macro_flow.py`
+- [x] **[CONCLUÍDO — 05/Nov/2026]** **Issue Doc02**: Catálogo Cultural expandido (6+4 eventos JSON), Cortejos Itinerantes (`ITINERANT`), Blindagem de Saturação Física (Carnaval/Fruin) implementados em `events_injection.py` + 3 novos testes verdes
+- [x] **[CONCLUÍDO — 05/Nov/2026]** **Issue Doc03**: Tipagem Semântica POIs, Atratividade Gravitacional Dinâmica `alpha_j(t,dia)`, Creep Flow, Egress rigoroso implementados em `markov_circulation.py` + 4 novos testes verdes
+- [x] **[CONCLUÍDO — 05/Nov/2026]** **Suíte completa**: 113 testes passando, 0 falhas, 1 warning ✅
+- [ ] **[PRÓXIMO]** Commit e push para `origin/main` com as 12 mudanças implementadas
+- [ ] **[FUTURO]** Verificar routers FastAPI (`backend/src/api/`) para expor novos parâmetros nos endpoints HTTP (`day_of_week`, `season`, `weather`, `manual_gamma`)
+- [ ] **[FUTURO]** Implementação dos Docs 04 e 00 — Pipeline Richards, ruído hardware, persistência GeoPackage

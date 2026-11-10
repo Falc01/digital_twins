@@ -38,6 +38,14 @@ DEFAULT_SENSOR_ID_TO_INDEX = {
     "igreja_rosario": 2,
     "sensor_rosario_dos_pretos": 2,
     "rosario_dos_pretos": 2,
+    "sensor_escadaria_do_passo": 2,
+    "escadaria_do_passo": 2,
+    "sensor_joao_de_deus": 3,
+    "joao_de_deus": 3,
+    "sensor_rua_maciel": 4,
+    "rua_maciel": 4,
+    "sensor_quincas_berro_d_agua": 3,
+    "quincas_berro_d_agua": 3,
 }
 
 
@@ -111,6 +119,23 @@ class MacroFlowConfig(BaseModel):
     regime: str = Field(
         default="unimodal",
         description="Regime circadiano: 'unimodal' (Gaussiana simples), 'trimodal' (mistura urbana) ou 'fourier' (harmônicos K=3)",
+    )
+    day_of_week: Optional[Union[int, str]] = Field(
+        default=None,
+        description="Preset por dia da semana (0..6 ou WEEKDAY, SATURDAY, SUNDAY)",
+    )
+    season: Optional[str] = Field(
+        default=None,
+        description="Estação do ano para calibração sazonal (SUMMER, SPRING, AUTUMN, WINTER)",
+    )
+    weather: Optional[str] = Field(
+        default=None,
+        description="Fator climático pluviométrico (SUNNY, LIGHT_RAIN, HEAVY_RAIN)",
+    )
+    manual_gamma: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Override manual de gamma pelo gestor",
     )
     peaks: Optional[List[Dict[str, float]]] = Field(
         default=None,
@@ -255,6 +280,23 @@ class MacroFlowRequest(BaseModel):
         default=1.0,
         ge=0.0,
         description="Multiplicador sazonal (ex: 1.0 dia normal, 1.5 verão, 3.5 Carnaval)",
+    )
+    day_of_week: Optional[Union[int, str]] = Field(
+        default=None,
+        description="Preset por dia da semana (0..6 ou WEEKDAY, SATURDAY, SUNDAY)",
+    )
+    season: Optional[str] = Field(
+        default=None,
+        description="Estação do ano para calibração sazonal (SUMMER, SPRING, AUTUMN, WINTER)",
+    )
+    weather: Optional[str] = Field(
+        default=None,
+        description="Fator climático pluviométrico (SUNNY, LIGHT_RAIN, HEAVY_RAIN)",
+    )
+    manual_gamma: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Override manual de gamma pelo gestor",
     )
     regime: Optional[str] = Field(
         default=None,
@@ -450,6 +492,9 @@ class MarkovCirculationConfig(BaseModel):
             "POI": 1.5,
             "IGREJA": 1.8,
             "SHOW": 2.5,
+            "COMERCIO": 1.5,
+            "RELIGIOSO": 1.8,
+            "CULTURAL": 2.5,
         },
         description="Multiplicadores basais por tipo de atrator urbano",
     )
@@ -533,6 +578,12 @@ class MarkovCirculationRequest(BaseModel):
         default=1.0,
         ge=0.0,
         description="Multiplicador sazonal da época",
+    )
+    day_of_week: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=6,
+        description="Dia da semana (0=Segunda, 5=Sábado, 6=Domingo) para modulação urbana de POIs",
     )
     step_minutes: Optional[float] = Field(
         default=None,
@@ -637,6 +688,11 @@ class EventRule(BaseModel):
     peak_hour: float = Field(..., ge=0.0, lt=24.0, description="Horário tau_jm de pico máximo em horas fracionárias")
     duration_hours: float = Field(..., gt=0.0, description="Largura/dispersão temporal sigma_jm em horas")
     magnitude: float = Field(..., ge=0.0, description="Amplitude A_jm de lotação agregada pelo evento")
+    mode: str = Field(default="ABSOLUTE", description="Modo de magnitude: ABSOLUTE ou RELATIVE")
+    capacity_ratio: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Fração phi_jm da capacidade do espaço (0.05 a 0.95)")
+    event_type: str = Field(default="STATIC", description="Tipo de evento: STATIC ou ITINERANT")
+    waypoints: Optional[List[int]] = Field(default=None, description="Sequência ordenada de nós para cortejo itinerante")
+    march_velocity_kmh: float = Field(default=2.0, gt=0.0, description="Velocidade média de marcha em km/h (cortejos)")
     day_of_week: Optional[int] = Field(None, ge=0, le=6, description="Dia da semana (0=Segunda, 6=Domingo) para eventos recorrentes")
     is_recurring: bool = Field(default=False, description="Indica se é uma regra semanal recorrente (Modo 1)")
 
@@ -656,11 +712,22 @@ class EventRule(BaseModel):
                 values["day_of_week"] = values["dia_semana"]
             if "sensor_index" in values and isinstance(values["sensor_index"], str):
                 values["sensor_index"] = resolve_sensor_index(values["sensor_index"])
+            if "modo" in values and "mode" not in values:
+                values["mode"] = values["modo"]
+            if "tipo" in values and "event_type" not in values:
+                values["event_type"] = values["tipo"]
+            if "trajeto" in values and "waypoints" not in values:
+                values["waypoints"] = values["trajeto"]
+            if "cortejo" in values and "waypoints" not in values:
+                values["waypoints"] = values["cortejo"]
         return values
 
     @model_validator(mode="after")
     def resolve_sensor_alias(self) -> "EventRule":
         if self.sensor_index is None:
+            if self.event_type.upper() == "ITINERANT" and self.waypoints and len(self.waypoints) > 0:
+                self.sensor_index = self.waypoints[0]
+                return self
             sensor_ref = self.sensor_alvo
             if sensor_ref is None:
                 raise ValueError("Evento precisa de sensor_index ou sensor_alvo/sensor_id válido.")
@@ -678,6 +745,9 @@ class EventsInjectionConfig(BaseModel):
     enable_mode1: bool = Field(default=True, description="Habilita Calendário Cultural Fixo (Modo 1)")
     enable_mode2: bool = Field(default=True, description="Habilita Agenda de Eventos Pontuais (Modo 2)")
     enable_mode3: bool = Field(default=True, description="Habilita Eventos Estocásticos Monte Carlo (Modo 3)")
+    enable_collective_damping: bool = Field(default=True, description="Amortecimento logístico coletivo sob múltiplos eventos (Fruin / Helbing)")
+    apply_carnaval_preset: bool = Field(default=False, description="Preset com blindagem de saturação e horários de Carnaval")
+    damping_factor: float = Field(default=1.5, gt=0.0, description="Fator de escala de amortecimento logístico (1.5 * N_j_max)")
     monte_carlo_prob: float = Field(default=0.15, ge=0.0, le=1.0, description="Probabilidade p de manifestação espontânea à tarde")
     min_capacity_ratio: float = Field(default=0.30, ge=0.0, le=1.0, description="Piso mínimo de corte de capacidade (0.30 * N_max)")
     max_capacity_ratio: float = Field(default=0.95, ge=0.0, le=1.0, description="Teto máximo de trava de capacidade (0.95 * N_max)")

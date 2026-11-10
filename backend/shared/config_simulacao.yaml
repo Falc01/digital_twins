@@ -17,6 +17,15 @@ simulation:
       - 0.35                      # Sensor Praça da Sé
       - 0.20                      # Sensor Ladeira do Carmo
       - 0.00                      # Sensor Largo interno (sem acesso externo)
+    seasonality:
+      SUMMER: 1.50                # Verão: Alta estação, cruzeiros e ensaios
+      SPRING: 1.10                # Primavera: Média estação, turismo cultural
+      AUTUMN: 0.90                # Outono: Transição, início de chuvas
+      WINTER: 0.75                # Inverno: Baixa estação, meses mais chuvosos
+    weather:
+      SUNNY: 1.00                 # Sol / Tempo firme
+      LIGHT_RAIN: 0.80            # Chuva fraca / Garoa (-20%)
+      HEAVY_RAIN: 0.40            # Chuva forte / Tempestade (-60%)
 
   network_markov:
     distance_decay_lambda: 0.015  # λ_d: decaimento de atração por metro (Canal B)

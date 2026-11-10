@@ -4,17 +4,53 @@
     "dia_semana": 1,
     "hora_pico": 20.0,
     "duracao_h": 1.5,
-    "magnitude": 80.0,
+    "magnitude": 180.0,
     "sensor_alvo": "sensor_largo_pelourinho",
     "sensor_index": 3
   },
   {
-    "regra_id": "missa_rosario_domingo",
+    "regra_id": "terca_bencao_geronimo",
+    "dia_semana": 1,
+    "hora_pico": 19.5,
+    "duracao_h": 1.8,
+    "magnitude": 120.0,
+    "sensor_alvo": "sensor_escadaria_do_passo",
+    "sensor_index": 2
+  },
+  {
+    "regra_id": "quinta_ensaio_dida",
+    "dia_semana": 3,
+    "hora_pico": 16.0,
+    "duracao_h": 1.2,
+    "magnitude": 90.0,
+    "sensor_alvo": "sensor_joao_de_deus",
+    "sensor_index": 3
+  },
+  {
+    "regra_id": "sabado_filhos_gandhy",
+    "dia_semana": 5,
+    "hora_pico": 17.0,
+    "duracao_h": 2.0,
+    "magnitude": 150.0,
+    "sensor_alvo": "sensor_rua_maciel",
+    "sensor_index": 4
+  },
+  {
+    "regra_id": "domingo_missa_rosario",
     "dia_semana": 6,
     "hora_pico": 9.5,
     "duracao_h": 1.0,
-    "magnitude": 50.0,
+    "magnitude": 100.0,
     "sensor_alvo": "sensor_igreja_rosario",
     "sensor_index": 2
+  },
+  {
+    "regra_id": "roda_capoeira_diaria",
+    "dia_semana": null,
+    "hora_pico": 15.5,
+    "duracao_h": 0.8,
+    "magnitude": 45.0,
+    "sensor_alvo": "sensor_terreiro_jesus",
+    "sensor_index": 4
   }
 ]

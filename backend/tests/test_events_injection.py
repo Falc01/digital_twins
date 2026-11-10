@@ -326,3 +326,111 @@ def test_post_calculate_events_endpoint():
     assert len(data["vector_E_eventos"]) == 4
     assert "node_bonuses" in data
     assert "active_events" in data
+
+
+# ==============================================================================
+# Testes das Propostas de Melhoria Doc 02 (Cortejos, Modo Dual & Fruin/Helbing)
+# ==============================================================================
+
+def test_itinerant_cortejo_spatial_wave():
+    """Valida cortejo itinerante móvel com defasagem temporal entre nós vizinhos."""
+    from src.simulation.events_injection import calculate_itinerant_pulses
+
+    cortejo = EventRule(
+        event_id="cortejo_afoxe_gandhy",
+        peak_hour=16.0,
+        duration_hours=0.5,
+        magnitude=120.0,
+        event_type="ITINERANT",
+        waypoints=[0, 1, 4, 3],
+        march_velocity_kmh=2.0,
+    )
+    caps = [150, 120, 80, 250, 200]
+
+    # No instante inicial (16h00), o pulso no nó 0 (Elevador) deve estar no pico
+    pulses_t0 = calculate_itinerant_pulses(current_time_hours=16.0, rule=cortejo, node_capacities=caps)
+    p0 = [p for p in pulses_t0 if p[0] == 0]
+    self_val_0 = p0[0][1] if p0 else 0.0
+
+    # No nó 1 (Praça da Sé), o pico deve ocorrer mais tarde
+    p1 = [p for p in pulses_t0 if p[0] == 1]
+    self_val_1_at_t0 = p1[0][1] if p1 else 0.0
+    assert self_val_0 > self_val_1_at_t0, "Nó 0 deve estar mais próximo do pico às 16h00 do que nó 1"
+
+    # Avalia que nó 1 atinge pico após nó 0
+    tau_node_0 = pulses_t0[0][3]
+    tau_node_1 = pulses_t0[1][3]
+    assert tau_node_1 > tau_node_0, f"Pico no nó 1 ({tau_node_1}) deve ser posterior ao nó 0 ({tau_node_0})"
+
+
+def test_dual_magnitude_relative_and_absolute():
+    """Valida o modo dual de magnitude (ABSOLUTE vs RELATIVE / invariância de escala)."""
+    sim = EventsInjectionSimulator(
+        config=EventsInjectionConfig(enable_mode1=False, enable_mode2=True, enable_mode3=False, enable_collective_damping=False),
+        calendar_path="/dev/null",
+        agenda_path="/dev/null",
+    )
+
+    # Evento Relativo: fração de 50% da capacidade
+    event_rel = EventRule(
+        event_id="evento_relativo",
+        sensor_index=3,
+        peak_hour=18.0,
+        duration_hours=1.0,
+        magnitude=0.0,
+        mode="RELATIVE",
+        capacity_ratio=0.50,
+    )
+
+    # Com capacidade 200 no nó 3 -> amplitude = 100
+    res_200 = sim.evaluate(current_time_hours=18.0, node_capacities=[100, 100, 100, 200], events_registry=[event_rel])
+    assert abs(res_200.vector_E_eventos[3] - 100.0) < 1.0
+
+    # Com capacidade 400 no nó 3 -> amplitude escala para 200
+    res_400 = sim.evaluate(current_time_hours=18.0, node_capacities=[100, 100, 100, 400], events_registry=[event_rel])
+    assert abs(res_400.vector_E_eventos[3] - 200.0) < 1.0
+
+    # Evento Absoluto: permanece fixo
+    event_abs = EventRule(
+        event_id="evento_absoluto",
+        sensor_index=3,
+        peak_hour=18.0,
+        duration_hours=1.0,
+        magnitude=120.0,
+        mode="ABSOLUTE",
+    )
+    res_abs_200 = sim.evaluate(current_time_hours=18.0, node_capacities=[100, 100, 100, 200], events_registry=[event_abs])
+    res_abs_400 = sim.evaluate(current_time_hours=18.0, node_capacities=[100, 100, 100, 400], events_registry=[event_abs])
+    assert abs(res_abs_200.vector_E_eventos[3] - res_abs_400.vector_E_eventos[3]) < 1e-4
+
+
+def test_carnaval_and_collective_saturation_damping_fruin_helbing():
+    """Valida o amortecimento coletivo logístico sob múltiplos eventos simultâneos (Carnaval)."""
+    # 5 eventos concorrentes colidindo simultaneamente no Largo do Pelourinho (nó 3)
+    concurrent_events = [
+        EventRule(event_id=f"carnaval_bloco_{i}", sensor_index=3, peak_hour=21.0, duration_hours=2.0, magnitude=180.0)
+        for i in range(5)
+    ]
+    caps = [150, 120, 80, 200]
+
+    # Sem amortecimento coletivo
+    sim_raw = EventsInjectionSimulator(
+        config=EventsInjectionConfig(enable_mode1=False, enable_mode2=True, enable_mode3=False, enable_collective_damping=False),
+        calendar_path="/dev/null",
+        agenda_path="/dev/null",
+    )
+    resp_raw = sim_raw.evaluate(current_time_hours=21.0, node_capacities=caps, events_registry=concurrent_events)
+    # Soma linear bruta seria 5 * 180 = 900 pessoas em um largo de capacidade 200!
+    assert resp_raw.vector_E_eventos[3] > 800.0
+
+    # Com blindagem e amortecimento coletivo logístico ativado
+    sim_damped = EventsInjectionSimulator(
+        config=EventsInjectionConfig(enable_mode1=False, enable_mode2=True, enable_mode3=False, enable_collective_damping=True, damping_factor=1.5),
+        calendar_path="/dev/null",
+        agenda_path="/dev/null",
+    )
+    resp_damped = sim_damped.evaluate(current_time_hours=21.0, node_capacities=caps, events_registry=concurrent_events)
+    # E_calibrado = E / (1.0 + E / (1.5 * 200)) = 900 / (1 + 3) = 225
+    assert resp_damped.vector_E_eventos[3] < 300.0, "Blindagem deve amortecer aglomeração impossível"
+    assert resp_damped.vector_E_eventos[3] < resp_raw.vector_E_eventos[3]
+

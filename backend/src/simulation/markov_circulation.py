@@ -82,23 +82,106 @@ def compute_distance_matrix(coords: Sequence[Tuple[float, float]]) -> np.ndarray
     return dist_matrix
 
 
+def get_poi_attraction(poi_type: str, hour: float, day_of_week: int = 0) -> float:
+    """
+    Retorna a força atrativa dinâmica alpha_j(t, dia) conforme o papel urbano do nó (Doc 03).
+
+    Tabela de Calibração (Doc 03):
+      - COMERCIO:
+          * Seg - Sex: alpha = 2.0 (10h-17h); 0.5 à noite
+          * Sáb: alpha = 2.2 (09h-14h); 0.2 à noite
+          * Dom: alpha = 0.1 o dia todo (comércio fechado)
+      - RELIGIOSO (e IGREJA):
+          * Seg - Sex: alpha = 1.0 (turismo sacro regular)
+          * Sáb: alpha = 1.2 de dia (09h-18h); 0.8 à noite
+          * Dom: alpha = 3.5 (09h-12h missas históricas); 1.0 resto do dia
+      - CULTURAL (e SHOW, EVENTO):
+          * Seg - Sex: alpha = 1.5 de dia; 0.8 após 20h
+          * Sáb: alpha = 2.0 à tarde; 3.0 (20h-23h)
+          * Dom: alpha = 2.0 no pôr do sol (15h-19h); cai para 0.6 após 19h30
+      - GATE:
+          * Seg - Sex: atrai forte após 18h (1.8); 0.6 durante o dia
+          * Sáb: retenção alta; portões atraem após 22h30 (1.8); 0.6 antes
+          * Dom: saída cedo a partir das 19h (1.8); 0.6 antes
+    """
+    h = calculate_circadian_hour(hour)
+    p_type = poi_type.upper().strip() if isinstance(poi_type, str) else "POI"
+
+    if p_type in ("IGREJA", "RELIGIOSO", "TEMPLO"):
+        cat = "RELIGIOSO"
+    elif p_type in ("SHOW", "EVENTO", "CULTURAL", "TEATRO", "MUSEU"):
+        cat = "CULTURAL"
+    elif p_type in ("COMERCIO", "LOJA", "MERCADO", "RESTAURANTE"):
+        cat = "COMERCIO"
+    elif p_type in ("GATE", "PORTAO", "ACESSO"):
+        cat = "GATE"
+    else:
+        cat = "CULTURAL"
+
+    is_sunday = (day_of_week == 6)
+    is_saturday = (day_of_week == 5)
+
+    if cat == "COMERCIO":
+        if is_sunday:
+            return 0.1
+        elif is_saturday:
+            return 2.2 if (9.0 <= h <= 14.0) else 0.2
+        else:
+            return 2.0 if (10.0 <= h <= 17.0) else 0.5
+
+    elif cat == "RELIGIOSO":
+        if is_sunday:
+            return 3.5 if (9.0 <= h <= 12.0) else 1.0
+        elif is_saturday:
+            return 1.2 if (9.0 <= h <= 18.0) else 0.8
+        else:
+            diff = h - 11.0
+            bell = math.exp(-(diff * diff) / (2.0 * 9.0))
+            return 0.6 + 0.8 * bell
+
+    elif cat == "CULTURAL":
+        if is_sunday:
+            return 2.0 if (15.0 <= h <= 19.5) else 0.6
+        elif is_saturday:
+            if 20.0 <= h <= 23.0:
+                return 3.0
+            elif 14.0 <= h < 20.0:
+                return 2.0
+            else:
+                return 1.0
+        else:
+            diff = h - 19.0
+            bell = math.exp(-(diff * diff) / (2.0 * 6.25))
+            return 0.5 + 0.7 * bell
+
+    elif cat == "GATE":
+        if is_sunday:
+            return 1.8 if h >= 19.0 else 0.6
+        elif is_saturday:
+            return 1.8 if h >= 22.5 else 0.6
+        else:
+            diff_out = h - 18.5
+            bell_out = math.exp(-(diff_out * diff_out) / (2.0 * 6.25))
+            egress_pull = 1.0 / (1.0 + math.exp(-0.7 * (h - 16.5)))
+            return 0.5 + 0.8 * egress_pull + 0.4 * bell_out
+
+    return 1.0
+
+
 def evaluate_hourly_attraction(
     t_hours: float,
     base_alphas: Sequence[float],
     poi_types: Sequence[str],
+    day_of_week: int = 0,
 ) -> np.ndarray:
     """
-    Modula a atratividade horária alpha_j(t) de cada POI conforme seu papel urbano (RF02).
-    
-    - IGREJA: Pico matinal/vespertino (missas e visitação histórica, 10h-14h);
-    - SHOW / POI: Pico vespertino/noturno (apresentações, ensaios de blocos e turismo, 17h-21h);
-    - GATE: Atração moderada/baixa durante o dia (fluxo é de entrada em direção às praças)
-      e inversão expressiva no fim de tarde e noite (17h-23h), atuando como ímã de retorno/saída (egress).
+    Modula a atratividade horária alpha_j(t) de cada POI conforme seu papel urbano e dia da semana (RF02 e Doc 03).
     
     Args:
         t_hours: Horário contínuo em horas (t >= 0).
         base_alphas: Vetor de atratividades basais de dimensão J.
-        poi_types: Lista de categorias ('GATE', 'POI', 'IGREJA', 'SHOW').
+        poi_types: Lista de categorias ('GATE', 'COMERCIO', 'RELIGIOSO', 'CULTURAL').
+        day_of_week: Dia da semana (0=Segunda, 5=Sábado, 6=Domingo).
         
     Returns:
         np.ndarray: Vetor float64 de dimensão (J,) com atratividades instantâneas alpha_j(t) > 0.
@@ -106,37 +189,11 @@ def evaluate_hourly_attraction(
     h = calculate_circadian_hour(t_hours)
     j_nodes = len(base_alphas)
     alphas = np.zeros(j_nodes, dtype=np.float64)
-    
+
     for idx, (base_alpha, p_type) in enumerate(zip(base_alphas, poi_types)):
-        p_upper = p_type.upper() if isinstance(p_type, str) else "POI"
-        
-        if p_upper == "IGREJA":
-            # Pico de atração matinal e diurna (missas, turismo histórico: 10h-14h)
-            diff = h - 11.0
-            bell = math.exp(-(diff * diff) / (2.0 * 9.0))
-            modulation = 0.6 + 0.8 * bell
-        elif p_upper in ("SHOW", "EVENTO"):
-            # Pico cultural vespertino e noturno (centralizado em 19h00, sigma = 2.5h)
-            diff = h - 19.0
-            bell = math.exp(-(diff * diff) / (2.0 * 6.25))
-            modulation = 0.5 + 0.7 * bell
-        elif p_upper == "GATE":
-            # Portões de entrada física:
-            # Durante manhã e início de tarde (08h-15h): atratividade contida (~0.5 a 0.8),
-            # pois pedestres são atraídos para o miolo histórico (Terreiro/Largo).
-            # No final de tarde e noite (17h-23h): sobe para (~1.5 a 1.8) puxando pedestres para egress.
-            diff_out = h - 18.5
-            bell_out = math.exp(-(diff_out * diff_out) / (2.0 * 6.25))
-            egress_pull = 1.0 / (1.0 + math.exp(-0.7 * (h - 16.5)))
-            modulation = 0.5 + 0.8 * egress_pull + 0.4 * bell_out
-        else:  # POI padrão / praça
-            # Lenta ascensão vespertina (pico às 16h30 acompanhando o turismo)
-            diff = h - 16.5
-            bell = math.exp(-(diff * diff) / (2.0 * 12.25))
-            modulation = 0.6 + 0.7 * bell
-            
-        alphas[idx] = max(0.1, float(base_alpha) * modulation)
-        
+        dyn_factor = get_poi_attraction(p_type, h, day_of_week=day_of_week)
+        alphas[idx] = max(0.1, float(base_alpha) * dyn_factor)
+
     return alphas
 
 
@@ -144,20 +201,25 @@ def calculate_gate_egress_probability(
     current_time_hours: float,
     base_rate: float = 0.08,
     step_minutes: float = 5.0,
+    day_of_week: int = 0,
 ) -> float:
     """
     Calcula a probabilidade instantânea de saída (egress) através de um nó de portão (GATE).
     
-    A curva circadiana de saída é baixa pela manhã/início da tarde (quando o fluxo é
-    predominantemente de entrada) e sobe no final da tarde e noite (17h às 23h),
-    modelando a dispersão de volta para hotéis, residências e terminais.
-    
-    Formula:
-        M_egress(h) = 1.0 / (1.0 + exp(-0.6 * (h - 17.5)))
-        p_exit = base_rate * (0.2 + 0.8 * M_egress(h)) * (step_minutes / 5.0)
+    A curva circadiana de saída é modulada pelo perfil de cada dia:
+    - Sábado: vida noturna prolongada, saída postergada para após 22h30.
+    - Domingo: encerramento mais cedo das atividades, saída a partir das 19h00.
+    - Dias úteis: dispersão de retorno para casa a partir das 17h30.
     """
     h = calculate_circadian_hour(current_time_hours)
-    diff = h - 17.5
+    if day_of_week == 5:
+        inflection = 22.5
+    elif day_of_week == 6:
+        inflection = 19.0
+    else:
+        inflection = 17.5
+
+    diff = h - inflection
     exp_val = -0.6 * diff
     if exp_val > 40.0:
         sigmoid = 0.0
@@ -165,7 +227,7 @@ def calculate_gate_egress_probability(
         sigmoid = 1.0
     else:
         sigmoid = 1.0 / (1.0 + math.exp(exp_val))
-        
+
     modulation = 0.2 + 0.8 * sigmoid
     rate = base_rate * modulation * (step_minutes / 5.0)
     return float(np.clip(rate, 0.0, 0.85))
@@ -181,7 +243,95 @@ def compute_markov_matrix(
     use_inertia: bool = False,
     egress_rates: Optional[Sequence[float]] = None,
     adjacency_matrix: Optional[np.ndarray] = None,
+    current_state_N: Optional[Sequence[float]] = None,
+    node_capacities: Optional[Sequence[float]] = None,
+    kappa_creep: float = 0.08,
 ) -> np.ndarray:
+    """
+    Computa a Matriz Estocástica de Transição de Markov P(t) de dimensão J x J (RF01, RF03, RF04).
+
+    Suporta:
+    - Gravidade Espacial de Huff: Numerador_ij = alpha_j(t) * exp(-lambda_d * d_ij);
+    - Topologia Urbana / Adjacência: A_ij in {0, 1} impede transições mágicas entre portões distantes;
+    - Inércia Temporal Convexa: rho = exp(-dt / tau_dwell);
+    - Mecanismo de Saturação e Inércia Local ("Creep Flow" - Fruin/Helbing/Weidmann sob N_j > 0.85 N_max);
+    - Cadeia de Markov Aberta com Egress: P_ij = (1 - p_exit,i) * P_ij_interno.
+    """
+    d_mat = np.asarray(dist_matrix, dtype=np.float64)
+    alphas = np.asarray(alpha_vector, dtype=np.float64)
+    j_nodes = d_mat.shape[0]
+
+    if d_mat.shape[0] != d_mat.shape[1]:
+        raise ValueError("A matriz de distâncias deve ser quadrada (J x J).")
+    if alphas.ndim != 1 or len(alphas) != j_nodes:
+        raise ValueError(f"O vetor de atratividades deve ter dimensão igual a {j_nodes}.")
+    if np.any(alphas <= 0.0):
+        raise ValueError("Todos os valores de atratividade alpha_j devem ser estritamente positivos.")
+    if lambda_decay <= 0.0:
+        raise ValueError("A taxa de decaimento lambda_decay deve ser estritamente positiva.")
+
+    # Numerador gravitacional vetorizado: broadcast de alpha_j sobre a exponencial de distâncias
+    spatial_decay = np.exp(-lambda_decay * d_mat)
+    numerator = alphas[np.newaxis, :] * spatial_decay
+
+    # Aplica o viés de permanência no mesmo logradouro se diferente de 1.0
+    if retention_bias != 1.0 and retention_bias > 0.0:
+        np.fill_diagonal(numerator, np.diag(numerator) * retention_bias)
+
+    # Aplica máscara de adjacência topológica urbana (RF01 / Topologia de Rede)
+    if adjacency_matrix is not None:
+        adj = np.asarray(adjacency_matrix, dtype=np.float64)
+        if adj.shape != (j_nodes, j_nodes):
+            raise ValueError(f"A matriz de adjacência deve ter dimensão ({j_nodes}, {j_nodes}).")
+        numerator = numerator * (adj > 0.0).astype(np.float64)
+
+    # Normalização estocástica por linha: Denominador_i = sum_k Numerador_ik
+    denominators = np.sum(numerator, axis=1, keepdims=True)
+    denominators = np.where(denominators <= 0.0, 1.0, denominators)
+    p_matrix = numerator / denominators
+
+    # Inércia temporal baseada no tempo médio de permanência e granularidade Δt
+    if use_inertia and dwell_time_minutes > 0.0 and step_minutes > 0.0:
+        rho = math.exp(-step_minutes / dwell_time_minutes)
+        p_inertial = (1.0 - rho) * p_matrix
+        np.fill_diagonal(p_inertial, np.diag(p_inertial) + rho)
+        p_matrix = p_inertial
+
+    # Mecanismo de Saturação e Inércia Local ("Creep Flow" - Doc 03, Fruin/Helbing/Weidmann)
+    if current_state_N is not None and node_capacities is not None:
+        c_state = np.asarray(current_state_N, dtype=np.float64)
+        c_caps = np.asarray(node_capacities, dtype=np.float64)
+        for i in range(j_nodes):
+            if i < len(c_state) and i < len(c_caps) and c_caps[i] > 0.0:
+                n_curr = c_state[i]
+                n_cap = c_caps[i]
+                threshold = 0.85 * n_cap
+                if n_curr > threshold:
+                    p_base = float(p_matrix[i, i])
+                    exp_arg = -kappa_creep * (n_curr - threshold)
+                    sig_val = (
+                        1.0 / (1.0 + math.exp(exp_arg))
+                        if -40.0 <= exp_arg <= 40.0
+                        else (1.0 if exp_arg < -40.0 else 0.0)
+                    )
+                    p_effective = p_base + (1.0 - p_base) * sig_val
+                    p_effective = min(0.98, max(p_base, p_effective))
+
+                    # Reajusta os outros elementos da linha i proporcionalmente
+                    sum_others = float(np.sum(p_matrix[i, :])) - p_base
+                    if sum_others > 1e-9:
+                        scale = (1.0 - p_effective) / sum_others
+                        p_matrix[i, :] = p_matrix[i, :] * scale
+                    p_matrix[i, i] = p_effective
+
+    # Cadeia de Markov aberta: aplica taxas de egress nos nós de portão
+    if egress_rates is not None:
+        egress_arr = np.asarray(egress_rates, dtype=np.float64)
+        if len(egress_arr) == j_nodes:
+            survival = np.clip(1.0 - egress_arr, 0.0, 1.0)[:, np.newaxis]
+            p_matrix = p_matrix * survival
+
+    return p_matrix
     """
     Computa a Matriz Estocástica de Transição de Markov P(t) de dimensão J x J (RF01, RF03, RF04).
     
@@ -329,6 +479,9 @@ class MarkovCirculationSimulator:
         step_minutes: Optional[float] = None,
         enable_egress: Optional[bool] = None,
         use_inertia: Optional[bool] = None,
+        day_of_week: int = 0,
+        current_state_N: Optional[Sequence[float]] = None,
+        node_capacities: Optional[Sequence[float]] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Calcula a matriz estocástica P(t) e o vetor de atratividades alpha(t) para o horário dado.
@@ -354,16 +507,19 @@ class MarkovCirculationSimulator:
                 t_hours=t_hours,
                 base_alphas=self.base_alphas,
                 poi_types=self.poi_types,
+                day_of_week=day_of_week,
             )
             
         egress_rates = None
         if egress_on:
             egress_rates = [
-                calculate_gate_egress_probability(t_hours, self.config.base_egress_rate, dt)
+                calculate_gate_egress_probability(t_hours, self.config.base_egress_rate, dt, day_of_week=day_of_week)
                 if p_type.upper() == "GATE" else 0.0
                 for p_type in self.poi_types
             ]
             
+        caps = node_capacities if node_capacities is not None else [node.max_capacity for node in self.config.nodes]
+
         p_matrix = compute_markov_matrix(
             dist_matrix=self.distance_matrix,
             alpha_vector=alphas,
@@ -374,6 +530,8 @@ class MarkovCirculationSimulator:
             use_inertia=inertia_on,
             egress_rates=egress_rates,
             adjacency_matrix=self.adjacency_matrix,
+            current_state_N=current_state_N,
+            node_capacities=caps,
         )
         return p_matrix, alphas
 
@@ -389,6 +547,7 @@ class MarkovCirculationSimulator:
         include_raw_flow: bool = False,
         delta_N_rotina: Optional[Sequence[float]] = None,
         vector_E_eventos: Optional[Sequence[float]] = None,
+        day_of_week: Optional[int] = None,
     ) -> MarkovCirculationResponse:
         """
         Executa um ciclo completo de redistribuição de pedestres por Markov (Doc 03).
@@ -406,6 +565,7 @@ class MarkovCirculationSimulator:
             include_raw_flow: Compor N_bruto(t+1) com novos ingressos e eventos para o Doc 04.
             delta_N_rotina: Influxo diferencial dos portões (Doc 01).
             vector_E_eventos: Pulsos de eventos nodais (Doc 02).
+            day_of_week: Dia da semana (0=Segunda, 5=Sábado, 6=Domingo).
             
         Returns:
             MarkovCirculationResponse: Payload com N_propagado, matriz P, fluxos nodais e N_bruto.
@@ -416,6 +576,7 @@ class MarkovCirculationSimulator:
         dt = step_minutes if step_minutes is not None else self.config.step_minutes
         egress_on = enable_egress if enable_egress is not None else self.config.enable_egress
         inertia_on = use_inertia if use_inertia is not None else self.config.use_inertia
+        dow = day_of_week if day_of_week is not None else datetime.now().weekday()
             
         h = calculate_circadian_hour(t_hours)
         j_nodes = len(self.sensor_ids)
@@ -426,6 +587,7 @@ class MarkovCirculationSimulator:
                 current_time_hours=t_hours,
                 gamma_seasonality=gamma,
                 step_minutes=dt,
+                day_of_week=day_of_week,
             )
             raw_n = macro_res.vector_N_rotina
             if len(raw_n) < j_nodes:
@@ -440,12 +602,16 @@ class MarkovCirculationSimulator:
                 )
 
         # Avalia matriz P(t) e atratores
+        caps = [node.max_capacity for node in self.config.nodes]
         p_matrix, alphas = self.evaluate_transition_matrix(
             t_hours=t_hours,
             alpha_override=alpha_override,
             step_minutes=dt,
             enable_egress=egress_on,
             use_inertia=inertia_on,
+            day_of_week=dow,
+            current_state_N=n_init,
+            node_capacities=caps,
         )
         
         # Propagação matricial: N_propagado = P^T * N_inicial

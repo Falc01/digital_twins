@@ -463,5 +463,138 @@ class TestMacroFlowSubsystem(unittest.TestCase):
         self.assertAlmostEqual(data["N_bairro_total"], 234.6, delta=1.0)
 
 
+    # =========================================================================
+    # Testes das Propostas de Melhoria Doc 01-A (Picos Modulares & Dias da Semana)
+    # =========================================================================
+
+    def test_modular_peaks_arbitrary_count_1_2_3_5(self):
+        """Valida que o motor aceita quantidade arbitrária de M picos (1, 2, 3 e 5 ondas)."""
+        from src.simulation.macro_flow import CircadianPeak
+
+        # 1 Pico (Madrugada/Almoço)
+        peaks_1 = [CircadianPeak(tau=12.0, sigma=1.5, weight=0.8)]
+        res_1 = calculate_multimodal_bairro_population(current_time_hours=12.0, peaks=peaks_1)
+        self.assertGreater(res_1.N_bairro, 100.0)
+
+        # 2 Picos
+        peaks_2 = [
+            CircadianPeak(tau=11.0, sigma=1.0, weight=0.5),
+            CircadianPeak(tau=17.0, sigma=2.0, weight=0.9),
+        ]
+        res_2 = calculate_multimodal_bairro_population(current_time_hours=17.0, peaks=peaks_2)
+        self.assertGreater(res_2.N_bairro, 150.0)
+
+        # 3 Picos
+        peaks_3 = [
+            CircadianPeak(tau=10.0, sigma=1.0, weight=0.4),
+            CircadianPeak(tau=14.0, sigma=1.2, weight=0.6),
+            CircadianPeak(tau=20.0, sigma=2.0, weight=0.8),
+        ]
+        res_3 = calculate_multimodal_bairro_population(current_time_hours=20.0, peaks=peaks_3)
+        self.assertGreater(res_3.N_bairro, 150.0)
+
+        # 5 Picos
+        peaks_5 = [
+            CircadianPeak(tau=8.0, sigma=0.8, weight=0.3),
+            CircadianPeak(tau=11.0, sigma=1.0, weight=0.5),
+            CircadianPeak(tau=14.0, sigma=1.0, weight=0.6),
+            CircadianPeak(tau=17.5, sigma=1.5, weight=0.9),
+            CircadianPeak(tau=22.0, sigma=1.8, weight=0.7),
+        ]
+        res_5 = calculate_multimodal_bairro_population(current_time_hours=17.5, peaks=peaks_5)
+        self.assertGreater(res_5.N_bairro, 200.0)
+
+    def test_day_of_week_presets_weekday_saturday_sunday(self):
+        """Valida os perfis calibrados para WEEKDAY, SATURDAY e SUNDAY (Doc 01-A)."""
+        from src.simulation.macro_flow import get_day_preset
+
+        preset_wd = get_day_preset("WEEKDAY")
+        self.assertEqual(preset_wd["N_min"], 15)
+        self.assertEqual(preset_wd["N_max"], 300)
+        self.assertEqual(len(preset_wd["peaks"]), 2)
+
+        preset_sat = get_day_preset(5)  # Sábado
+        self.assertEqual(preset_sat["N_min"], 25)
+        self.assertEqual(preset_sat["N_max"], 420)
+        self.assertEqual(len(preset_sat["peaks"]), 3)
+
+        preset_sun = get_day_preset("SUNDAY")  # Domingo
+        self.assertEqual(preset_sun["N_min"], 10)
+        self.assertEqual(preset_sun["N_max"], 320)
+        self.assertEqual(len(preset_sun["peaks"]), 2)
+
+        # Sábado à noite (21h30) deve ter muito mais público que dia útil no mesmo horário
+        pop_sat_night = calculate_bairro_population(current_time_hours=21.5, day_of_week=5)
+        pop_wd_night = calculate_bairro_population(current_time_hours=21.5, day_of_week=2)
+        self.assertGreater(pop_sat_night.N_bairro, pop_wd_night.N_bairro)
+
+        # Domingo às 10h00 (missa) tem pico expressivo matinal
+        pop_sun_morning = calculate_bairro_population(current_time_hours=10.0, day_of_week=6)
+        self.assertGreater(pop_sun_morning.N_bairro, 150.0)
+
+    def test_differential_gate_influx_conservation(self):
+        """Valida que o influxo diferencial por portão obedece estritamente sum(Phi_in) == Delta_N."""
+        macro_resp = calculate_macro_flow(
+            current_time_hours=16.0,
+            step_minutes=5.0,
+            use_incremental=True,
+        )
+        total_delta = macro_resp.delta_N_bairro
+        sum_gates_delta = sum(macro_resp.delta_N_rotina)
+        self.assertAlmostEqual(total_delta, sum_gates_delta, delta=1e-2)
+
+    # =========================================================================
+    # Testes das Propostas de Melhoria Doc 01-B (Sazonalidade, Clima & Override)
+    # =========================================================================
+
+    def test_seasonality_four_seasons(self):
+        """Valida multiplicadores das 4 estações em Salvador: Verão 1.5, Primavera 1.1, Outono 0.9, Inverno 0.75."""
+        from src.simulation.macro_flow import calculate_gamma_seasonality
+
+        g_summer = calculate_gamma_seasonality(season="SUMMER")
+        g_spring = calculate_gamma_seasonality(season="SPRING")
+        g_autumn = calculate_gamma_seasonality(season="AUTUMN")
+        g_winter = calculate_gamma_seasonality(season="WINTER")
+
+        self.assertEqual(g_summer, 1.50)
+        self.assertEqual(g_spring, 1.10)
+        self.assertEqual(g_autumn, 0.90)
+        self.assertEqual(g_winter, 0.75)
+
+        # População no verão deve superar a do inverno
+        pop_summer = calculate_macro_flow(current_time_hours=16.5, season="SUMMER")
+        pop_winter = calculate_macro_flow(current_time_hours=16.5, season="WINTER")
+        self.assertGreater(pop_summer.N_bairro_total, pop_winter.N_bairro_total)
+
+    def test_weather_factors_rain_reduction(self):
+        """Valida o impacto do clima no calçamento do Pelourinho: Sol 1.0, Chuva Fraca 0.8, Tempestade 0.4."""
+        from src.simulation.macro_flow import calculate_gamma_seasonality
+
+        g_sunny = calculate_gamma_seasonality(weather="SUNNY")
+        g_light = calculate_gamma_seasonality(weather="LIGHT_RAIN")
+        g_heavy = calculate_gamma_seasonality(weather="HEAVY_RAIN")
+
+        self.assertEqual(g_sunny, 1.00)
+        self.assertEqual(g_light, 0.80)
+        self.assertEqual(g_heavy, 0.40)
+
+        pop_sunny = calculate_macro_flow(current_time_hours=16.0, weather="SUNNY")
+        pop_rain = calculate_macro_flow(current_time_hours=16.0, weather="HEAVY_RAIN")
+        self.assertAlmostEqual(pop_rain.N_bairro_total, 0.40 * pop_sunny.N_bairro_total, delta=1.0)
+
+    def test_gamma_effective_unification_and_manual_override(self):
+        """Valida a fórmula gamma_efetivo = gamma_manual * gamma_estacao * omega_clima."""
+        from src.simulation.macro_flow import calculate_gamma_seasonality
+
+        # Verão (1.5) + Garoa (0.8) com ajuste manual 1.2
+        g_eff = calculate_gamma_seasonality(season="SUMMER", weather="LIGHT_RAIN", manual_gamma=1.2)
+        # 1.2 * 1.5 * 0.8 = 1.44
+        self.assertAlmostEqual(g_eff, 1.44, places=4)
+
+        # Gestor define override manual total direto
+        res = calculate_macro_flow(current_time_hours=16.5, manual_gamma=2.15)
+        self.assertEqual(res.gamma_seasonality, 2.15)
+
+
 if __name__ == "__main__":
     unittest.main()

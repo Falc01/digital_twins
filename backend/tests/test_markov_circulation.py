@@ -365,3 +365,96 @@ def test_api_markov_propagate_with_egress_and_raw_flow():
     assert data["vector_N_bruto"] is not None
     assert len(data["vector_N_bruto"]) == 5
     assert data["conservation_error"] < 1e-4
+
+
+# ==============================================================================
+# 7. Testes das Propostas de Melhoria Doc 03 (Tipagem de POIs, Creep Flow & Egress)
+# ==============================================================================
+
+def test_stochastic_normalization_invariant_100_percent():
+    """Valida a invariante estocástica estrita: sum_j P_ij + P_egress == 1.000000 +- 1e-6."""
+    from src.simulation.markov_circulation import compute_markov_matrix
+
+    dist_mat = np.array([
+        [0.0, 100.0, 200.0],
+        [100.0, 0.0, 150.0],
+        [200.0, 150.0, 0.0],
+    ])
+    alphas = [1.0, 1.5, 2.0]
+    egress_rates = [0.12, 0.0, 0.0]  # nó 0 é portão
+
+    # Com egress e creep flow
+    p_mat = compute_markov_matrix(
+        dist_matrix=dist_mat,
+        alpha_vector=alphas,
+        egress_rates=egress_rates,
+        current_state_N=[250.0, 40.0, 20.0],
+        node_capacities=[200.0, 100.0, 100.0],
+    )
+
+    # Para cada linha i: soma das probabilidades internas + egress rate == 1.0
+    for i in range(3):
+        row_sum = float(np.sum(p_mat[i, :]))
+        exit_p = egress_rates[i]
+        assert abs((row_sum + exit_p) - 1.0) < 1e-6, f"Linha {i} violou normalização: {row_sum + exit_p}"
+
+
+def test_dynamic_attraction_sunday_religious_vs_commercial():
+    """Valida que aos domingos de manhã o nó RELIGIOSO atrai > 3x mais que o COMERCIO."""
+    from src.simulation.markov_circulation import get_poi_attraction
+
+    # Domingo (day_of_week = 6) às 10h30 (missas históricas)
+    alpha_religioso = get_poi_attraction(poi_type="RELIGIOSO", hour=10.5, day_of_week=6)
+    alpha_comercio = get_poi_attraction(poi_type="COMERCIO", hour=10.5, day_of_week=6)
+
+    # RELIGIOSO = 3.5, COMERCIO = 0.1
+    assert alpha_religioso >= 3.0
+    assert alpha_comercio <= 0.2
+    assert alpha_religioso > 3.0 * alpha_comercio
+    assert alpha_religioso / alpha_comercio > 10.0
+
+
+def test_saturday_night_egress_lower_than_thursday_night():
+    """Valida que aos sábados à noite a probabilidade de egress nos portões é menor que nas quintas-feiras."""
+    from src.simulation.markov_circulation import calculate_gate_egress_probability
+
+    # Às 20h00
+    egress_saturday = calculate_gate_egress_probability(current_time_hours=20.0, day_of_week=5)
+    egress_thursday = calculate_gate_egress_probability(current_time_hours=20.0, day_of_week=3)
+
+    assert egress_saturday < egress_thursday, (
+        f"Egress de sábado ({egress_saturday:.4f}) deve ser menor que de quinta-feira ({egress_thursday:.4f})"
+    )
+
+
+def test_creep_flow_high_density_inertia_boost():
+    """Valida o mecanismo de creep flow: se N_j > 0.85 N_max, a diagonal P_jj aumenta expressivamente."""
+    from src.simulation.markov_circulation import compute_markov_matrix
+
+    dist_mat = np.array([
+        [0.0, 100.0],
+        [100.0, 0.0],
+    ])
+    alphas = [1.0, 1.0]
+
+    # Cenário normal: nó 0 tem 50 pessoas de capacidade 200 (25% - densidade livre)
+    p_free = compute_markov_matrix(
+        dist_matrix=dist_mat,
+        alpha_vector=alphas,
+        current_state_N=[50.0, 50.0],
+        node_capacities=[200.0, 200.0],
+    )
+    p00_free = p_free[0, 0]
+
+    # Cenário saturado (Creep Flow): nó 0 tem 190 pessoas de capacidade 200 (95% - LOS F)
+    p_crowded = compute_markov_matrix(
+        dist_matrix=dist_mat,
+        alpha_vector=alphas,
+        current_state_N=[190.0, 50.0],
+        node_capacities=[200.0, 200.0],
+    )
+    p00_crowded = p_crowded[0, 0]
+
+    assert p00_crowded > p00_free, f"Inércia sob creep flow ({p00_crowded}) deve superar fluxo livre ({p00_free})"
+    assert np.allclose(np.sum(p_crowded, axis=1), [1.0, 1.0], atol=1e-6)
+

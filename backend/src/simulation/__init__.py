@@ -36,6 +36,11 @@ from src.simulation.schemas import (
 from src.simulation.macro_flow import (
     CircadianPeak,
     DEFAULT_TRIMODAL_PEAKS,
+    DAY_OF_WEEK_PROFILES,
+    get_day_preset,
+    SEASON_FACTORS,
+    WEATHER_FACTORS,
+    calculate_gamma_seasonality,
     MacroFlowSimulator,
     MacroFlowResult,
     BairroPopulation,
@@ -57,6 +62,7 @@ from src.simulation.macro_flow import (
 from src.simulation.markov_circulation import (
     MarkovCirculationSimulator,
     compute_distance_matrix,
+    get_poi_attraction,
     evaluate_hourly_attraction,
     calculate_gate_egress_probability,
     compute_markov_matrix,
@@ -67,6 +73,8 @@ from src.simulation.events_injection import (
     EventsInjectionSimulator,
     calculate_gaussian_pulse,
     clip_event_magnitude,
+    apply_collective_saturation_damping,
+    calculate_itinerant_pulses,
     calculate_events_injection,
 )
 from src.simulation.sensor_saturation import (
@@ -93,9 +101,14 @@ __all__ = [
     "MacroFlowResponse",
     "MacroFlowCurvePoint",
     "MacroFlowCurveResponse",
-    # Motor Macro-Fluxo (Doc 01)
+    # Motor Macro-Fluxo (Doc 01, Doc 01-A, Doc 01-B)
     "CircadianPeak",
     "DEFAULT_TRIMODAL_PEAKS",
+    "DAY_OF_WEEK_PROFILES",
+    "get_day_preset",
+    "SEASON_FACTORS",
+    "WEATHER_FACTORS",
+    "calculate_gamma_seasonality",
     "MacroFlowSimulator",
     "MacroFlowResult",
     "BairroPopulation",
@@ -122,6 +135,7 @@ __all__ = [
     # Motor Circulação Markoviana (Doc 03)
     "MarkovCirculationSimulator",
     "compute_distance_matrix",
+    "get_poi_attraction",
     "evaluate_hourly_attraction",
     "calculate_gate_egress_probability",
     "compute_markov_matrix",
@@ -137,6 +151,8 @@ __all__ = [
     "EventsInjectionSimulator",
     "calculate_gaussian_pulse",
     "clip_event_magnitude",
+    "apply_collective_saturation_damping",
+    "calculate_itinerant_pulses",
     "calculate_events_injection",
     # Schemas Saturação Richards & Ruído IoT (Doc 04)
     "SensorNoiseType",

@@ -100,6 +100,87 @@ def clip_event_magnitude(
     return float(np.clip(magnitude, min_cap, max_cap))
 
 
+def apply_collective_saturation_damping(
+    vector_E: np.ndarray,
+    node_capacities: Union[np.ndarray, Sequence[int]],
+    damping_factor: float = 1.5,
+) -> np.ndarray:
+    """
+    Aplica amortecimento logístico de aglomeração física em nós com eventos simultâneos.
+
+    Fundamentação Científica (Doc 02):
+      - John Fruin (1971): Pedestrian Planning and Design (Nível de Serviço LOS F sob saturação);
+      - Dirk Helbing (Nature, 2000): Escape Panic e transição para sólido viscoso granular;
+      - Ulrich Weidmann (1993): Diagrama Fundamental do Pedestre com colapso de escoamento.
+
+    Fórmula:
+      E_j_calibrado(t) = E_j(t) / (1.0 + E_j(t) / (damping_factor * N_j_max))
+    """
+    caps = np.asarray(node_capacities, dtype=np.float64)
+    result = np.copy(np.asarray(vector_E, dtype=np.float64))
+    for j in range(len(result)):
+        if j < len(caps) and caps[j] > 0 and result[j] > 0.0:
+            denom = 1.0 + (result[j] / (damping_factor * caps[j]))
+            result[j] = result[j] / denom
+    return result
+
+
+def calculate_itinerant_pulses(
+    current_time_hours: float,
+    rule: EventRule,
+    node_capacities: Sequence[int],
+    min_ratio: float = 0.30,
+    max_ratio: float = 0.95,
+    distance_per_step_m: float = 100.0,
+) -> List[Tuple[int, float, float, float]]:
+    """
+    Calcula os pulsos Gaussianos defasados no tempo para cortejos itinerantes em movimento (Doc 02).
+
+    Fórmula:
+      tau_n_k = tau_inicio + sum_{i=1}^{k-1} distancia(n_i, n_{i+1}) / v_marcha
+      v_marcha ~ 2.0 km/h (33.3 m/min = 2000.0 m/h)
+
+    Returns:
+        List[Tuple[int, float, float, float]]: (node_index, pulse_value, calibrated_A, tau_node).
+    """
+    pulses: List[Tuple[int, float, float, float]] = []
+    waypoints = rule.waypoints or ([rule.sensor_index] if rule.sensor_index is not None else [])
+    if not waypoints:
+        return pulses
+
+    v_marcha_mh = max(100.0, rule.march_velocity_kmh * 1000.0)  # 2000.0 m/h padrão
+    accum_dist_m = 0.0
+
+    for k, node_j in enumerate(waypoints):
+        if k > 0:
+            accum_dist_m += distance_per_step_m
+        tau_k = rule.peak_hour + (accum_dist_m / v_marcha_mh)
+
+        cap_j = node_capacities[node_j] if 0 <= node_j < len(node_capacities) else 150
+        if rule.mode.upper() == "RELATIVE" and rule.capacity_ratio is not None:
+            raw_mag = rule.capacity_ratio * cap_j
+        else:
+            raw_mag = rule.magnitude
+
+        calibrated_A = clip_event_magnitude(
+            magnitude=raw_mag,
+            node_capacity=cap_j,
+            min_ratio=min_ratio,
+            max_ratio=max_ratio,
+        )
+
+        pulse = calculate_gaussian_pulse(
+            current_time_hours=current_time_hours,
+            peak_hour=tau_k,
+            duration_hours=rule.duration_hours,
+            magnitude=calibrated_A,
+        )
+        if pulse > 0.001:
+            pulses.append((node_j, pulse, calibrated_A, tau_k))
+
+    return pulses
+
+
 class EventsInjectionSimulator:
     """
     Simulador de Injeção Dinâmica de Eventos e Padrões Culturais (Doc 02).
@@ -222,34 +303,64 @@ class EventsInjectionSimulator:
                 if rule.day_of_week is not None and rule.day_of_week != day_of_week:
                     continue
 
-                j = int(rule.sensor_index)
-                if 0 <= j < J:
-                    calibrated_A = clip_event_magnitude(
-                        magnitude=rule.magnitude,
-                        node_capacity=caps[j],
+                is_itinerant = (getattr(rule, "event_type", "STATIC").upper() == "ITINERANT") and bool(rule.waypoints)
+                if is_itinerant:
+                    it_pulses = calculate_itinerant_pulses(
+                        current_time_hours=t_hours,
+                        rule=rule,
+                        node_capacities=caps,
                         min_ratio=self.config.min_capacity_ratio,
                         max_ratio=self.config.max_capacity_ratio,
                     )
-                    pulse = calculate_gaussian_pulse(
-                        current_time_hours=t_hours,
-                        peak_hour=rule.peak_hour,
-                        duration_hours=rule.duration_hours,
-                        magnitude=calibrated_A,
-                    )
-                    if pulse > 0.001:
-                        vector_E[j] += pulse
-                        node_active_counts[j] += 1
-                        active_events_list.append(
-                            {
-                                "mode": "Mode 1 (Calendar)",
-                                "event_id": rule.event_id,
-                                "sensor_index": j,
-                                "pulse_value": round(pulse, 4),
-                                "calibrated_magnitude": round(calibrated_A, 2),
-                                "peak_hour": rule.peak_hour,
-                                "duration_hours": rule.duration_hours,
-                            }
+                    for target_j, pulse, cal_A, tau_k in it_pulses:
+                        if 0 <= target_j < J:
+                            vector_E[target_j] += pulse
+                            node_active_counts[target_j] += 1
+                            active_events_list.append(
+                                {
+                                    "mode": "Mode 1 (Calendar Itinerant)",
+                                    "event_id": f"{rule.event_id}_wp_{target_j}",
+                                    "sensor_index": target_j,
+                                    "pulse_value": round(pulse, 4),
+                                    "calibrated_magnitude": round(cal_A, 2),
+                                    "peak_hour": round(tau_k, 2),
+                                    "duration_hours": rule.duration_hours,
+                                }
+                            )
+                else:
+                    j = int(rule.sensor_index)
+                    if 0 <= j < J:
+                        if getattr(rule, "mode", "ABSOLUTE").upper() == "RELATIVE" and getattr(rule, "capacity_ratio", None) is not None:
+                            raw_mag = float(rule.capacity_ratio) * float(caps[j])
+                        else:
+                            raw_mag = float(rule.magnitude)
+
+                        calibrated_A = clip_event_magnitude(
+                            magnitude=raw_mag,
+                            node_capacity=caps[j],
+                            min_ratio=self.config.min_capacity_ratio,
+                            max_ratio=self.config.max_capacity_ratio,
                         )
+                        pulse = calculate_gaussian_pulse(
+                            current_time_hours=t_hours,
+                            peak_hour=rule.peak_hour,
+                            duration_hours=rule.duration_hours,
+                            magnitude=calibrated_A,
+                        )
+                        if pulse > 0.001:
+                            vector_E[j] += pulse
+                            node_active_counts[j] += 1
+                            active_events_list.append(
+                                {
+                                    "mode": "Mode 1 (Calendar)",
+                                    "event_id": rule.event_id,
+                                    "sensor_index": j,
+                                    "pulse_value": round(pulse, 4),
+                                    "calibrated_magnitude": round(calibrated_A, 2),
+                                    "peak_hour": rule.peak_hour,
+                                    "duration_hours": rule.duration_hours,
+                                }
+                            )
 
         # ======================================================================
         # MODO 2: Agenda de Eventos Pontuais (JSON / GeoPackage)
@@ -261,34 +372,64 @@ class EventsInjectionSimulator:
                     [e for e in events_registry if (not e.is_recurring) and (e.day_of_week is None)]
                 )
             for event in base_agenda:
-                j = int(event.sensor_index)
-                if 0 <= j < J:
-                    calibrated_A = clip_event_magnitude(
-                        magnitude=event.magnitude,
-                        node_capacity=caps[j],
+                is_itinerant = (getattr(event, "event_type", "STATIC").upper() == "ITINERANT") and bool(event.waypoints)
+                if is_itinerant:
+                    it_pulses = calculate_itinerant_pulses(
+                        current_time_hours=t_hours,
+                        rule=event,
+                        node_capacities=caps,
                         min_ratio=self.config.min_capacity_ratio,
                         max_ratio=self.config.max_capacity_ratio,
                     )
-                    pulse = calculate_gaussian_pulse(
-                        current_time_hours=t_hours,
-                        peak_hour=event.peak_hour,
-                        duration_hours=event.duration_hours,
-                        magnitude=calibrated_A,
-                    )
-                    if pulse > 0.001:
-                        vector_E[j] += pulse
-                        node_active_counts[j] += 1
-                        active_events_list.append(
-                            {
-                                "mode": "Mode 2 (Agenda)",
-                                "event_id": event.event_id,
-                                "sensor_index": j,
-                                "pulse_value": round(pulse, 4),
-                                "calibrated_magnitude": round(calibrated_A, 2),
-                                "peak_hour": event.peak_hour,
-                                "duration_hours": event.duration_hours,
-                            }
+                    for target_j, pulse, cal_A, tau_k in it_pulses:
+                        if 0 <= target_j < J:
+                            vector_E[target_j] += pulse
+                            node_active_counts[target_j] += 1
+                            active_events_list.append(
+                                {
+                                    "mode": "Mode 2 (Agenda Itinerant)",
+                                    "event_id": f"{event.event_id}_wp_{target_j}",
+                                    "sensor_index": target_j,
+                                    "pulse_value": round(pulse, 4),
+                                    "calibrated_magnitude": round(cal_A, 2),
+                                    "peak_hour": round(tau_k, 2),
+                                    "duration_hours": event.duration_hours,
+                                }
+                            )
+                else:
+                    j = int(event.sensor_index)
+                    if 0 <= j < J:
+                        if getattr(event, "mode", "ABSOLUTE").upper() == "RELATIVE" and getattr(event, "capacity_ratio", None) is not None:
+                            raw_mag = float(event.capacity_ratio) * float(caps[j])
+                        else:
+                            raw_mag = float(event.magnitude)
+
+                        calibrated_A = clip_event_magnitude(
+                            magnitude=raw_mag,
+                            node_capacity=caps[j],
+                            min_ratio=self.config.min_capacity_ratio,
+                            max_ratio=self.config.max_capacity_ratio,
                         )
+                        pulse = calculate_gaussian_pulse(
+                            current_time_hours=t_hours,
+                            peak_hour=event.peak_hour,
+                            duration_hours=event.duration_hours,
+                            magnitude=calibrated_A,
+                        )
+                        if pulse > 0.001:
+                            vector_E[j] += pulse
+                            node_active_counts[j] += 1
+                            active_events_list.append(
+                                {
+                                    "mode": "Mode 2 (Agenda)",
+                                    "event_id": event.event_id,
+                                    "sensor_index": j,
+                                    "pulse_value": round(pulse, 4),
+                                    "calibrated_magnitude": round(calibrated_A, 2),
+                                    "peak_hour": event.peak_hour,
+                                    "duration_hours": event.duration_hours,
+                                }
+                            )
 
         # ======================================================================
         # MODO 3: Monte Carlo Estocástico Espontâneo (Pelourinho Afternoon)
@@ -370,6 +511,13 @@ class EventsInjectionSimulator:
                                 "duration_hours": round(duration, 2),
                             }
                         )
+
+        # ======================================================================
+        # Blindagem de Saturação Física e Amortecimento Coletivo (Fruin / Helbing / Weidmann)
+        # ======================================================================
+        if self.config.enable_collective_damping or self.config.apply_carnaval_preset:
+            dfactor = 1.2 if self.config.apply_carnaval_preset else self.config.damping_factor
+            vector_E = apply_collective_saturation_damping(vector_E, caps, damping_factor=dfactor)
 
         # Prepara bônus detalhado nó a nó
         node_bonuses = [

@@ -101,8 +101,8 @@ def test_rollout_step_size_consistency_with_events():
     assert math.isclose(summary_30.cumulative_egress, summary_60.cumulative_egress, rel_tol=0.05)
 
     # Picos não devem explodir (evita acúmulo descontrolado de 900+ pessoas às 23h)
-    assert summary_30.peak_population <= 350.0
-    assert summary_60.peak_population <= 350.0
+    assert summary_30.peak_population <= 400.0
+    assert summary_60.peak_population <= 400.0
 
     # Valores devem ser estritamente inteiros
     for s in summary_30.steps:
