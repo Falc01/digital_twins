@@ -1,4 +1,4 @@
-"""
+git add ."""
 Suíte de Testes Automatizados para o Subsistema de Injeção de Eventos (Doc 02).
 
 Valida os Requisitos Funcionais (RF01 a RF05) e Não-Funcionais (RNF01 e RNF02)
