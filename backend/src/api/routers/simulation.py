@@ -203,13 +203,20 @@ def get_markov_config() -> MarkovCirculationConfig:
 def get_markov_transition_matrix(
     time_hours: Optional[float] = Query(
         None,
-        description="Horário contínuo em horas (ex: 16.5). Se omitido, usa hora atual.",
+        description="Hor?rio cont?nuo em horas (ex: 16.5). Se omitido, usa hora atual.",
+    ),
+    day_of_week: Optional[int] = Query(
+        None,
+        ge=0,
+        le=6,
+        description="Dia da semana (0=Segunda, 5=S?bado, 6=Domingo) para modula??o de POIs.",
     ),
 ) -> Dict[str, Any]:
     """
     Retorna a matriz de transição estocástica P(t) e os pesos atratores alpha(t) para o horário (Doc 03).
     """
-    p_mat, alphas = _DEFAULT_MARKOV_SIMULATOR.evaluate_transition_matrix(t_hours=time_hours)
+    dow = day_of_week if day_of_week is not None else 0
+    p_mat, alphas = _DEFAULT_MARKOV_SIMULATOR.evaluate_transition_matrix(t_hours=time_hours, day_of_week=dow)
     return {
         "time_hours": time_hours,
         "sensor_ids": _DEFAULT_MARKOV_SIMULATOR.sensor_ids,
@@ -248,6 +255,7 @@ def propagate_markov_network(
             include_raw_flow=payload.include_raw_flow,
             delta_N_rotina=payload.delta_N_rotina,
             vector_E_eventos=payload.vector_E_eventos,
+            day_of_week=payload.day_of_week,
         )
         return response
     except ValueError as e:

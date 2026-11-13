@@ -458,3 +458,60 @@ def test_creep_flow_high_density_inertia_boost():
     assert p00_crowded > p00_free, f"Inércia sob creep flow ({p00_crowded}) deve superar fluxo livre ({p00_free})"
     assert np.allclose(np.sum(p_crowded, axis=1), [1.0, 1.0], atol=1e-6)
 
+def test_default_config_canonical_poi_types():
+    """Valida tipagem sem?ntica can?nica nos n?s padr?o de MarkovCirculationConfig (Doc 03)."""
+    cfg = MarkovCirculationConfig()
+    poi_types = [node.poi_type for node in cfg.nodes]
+    assert poi_types == ["GATE", "GATE", "GATE", "CULTURAL", "RELIGIOSO"]
+
+
+def test_creep_flow_isolated_node_preserves_stochasticity():
+    """Garante que um n? isolado (p_base == 1.0) saturado preserva soma de linha == 1.0."""
+    dist_mat = np.array([
+        [0.0, 100.0],
+        [100.0, 0.0],
+    ])
+    adj = np.array([
+        [1.0, 0.0],  # n? 0 isolado (sem sa?da para n? 1)
+        [0.0, 1.0],
+    ])
+    p_mat = compute_markov_matrix(
+        dist_matrix=dist_mat,
+        alpha_vector=[1.0, 1.0],
+        adjacency_matrix=adj,
+        current_state_N=[250.0, 10.0],
+        node_capacities=[200.0, 200.0],
+    )
+    assert pytest.approx(float(np.sum(p_mat[0, :])), abs=1e-6) == 1.0
+    assert pytest.approx(float(p_mat[0, 0]), abs=1e-6) == 1.0
+
+
+def test_day_of_week_forwarded_in_wrapper_and_api():
+    """Valida que propagate_markov_flow e endpoints REST repassam day_of_week corretamente."""
+    res_sun = propagate_markov_flow(
+        current_state_N=[50.0, 50.0, 50.0, 50.0, 50.0],
+        current_time_hours=10.5,
+        day_of_week=6,
+    )
+    res_sat = propagate_markov_flow(
+        current_state_N=[50.0, 50.0, 50.0, 50.0, 50.0],
+        current_time_hours=10.5,
+        day_of_week=5,
+    )
+    # Domingo 10h30: n? 4 (Terreiro de Jesus / RELIGIOSO) deve atrair mais que no S?bado 10h30
+    assert res_sun.attraction_vector[4] > res_sat.attraction_vector[4]
+
+    api_res = client.post(
+        "/api/v1/simulation/markov/propagate",
+        json={
+            "current_time_hours": 10.5,
+            "day_of_week": 6,
+            "current_state_N": [50.0, 50.0, 50.0, 50.0, 50.0],
+        },
+    )
+    assert api_res.status_code == 200
+    assert api_res.json()["attraction_vector"][4] == res_sun.attraction_vector[4]
+
+    mat_res = client.get("/api/v1/simulation/markov/matrix?time_hours=10.5&day_of_week=6")
+    assert mat_res.status_code == 200
+    assert mat_res.json()["attraction_alphas"][4] == res_sun.attraction_vector[4]

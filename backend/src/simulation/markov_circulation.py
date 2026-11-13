@@ -308,92 +308,21 @@ def compute_markov_matrix(
                 threshold = 0.85 * n_cap
                 if n_curr > threshold:
                     p_base = float(p_matrix[i, i])
-                    exp_arg = -kappa_creep * (n_curr - threshold)
-                    sig_val = (
-                        1.0 / (1.0 + math.exp(exp_arg))
-                        if -40.0 <= exp_arg <= 40.0
-                        else (1.0 if exp_arg < -40.0 else 0.0)
-                    )
-                    p_effective = p_base + (1.0 - p_base) * sig_val
-                    p_effective = min(0.98, max(p_base, p_effective))
-
-                    # Reajusta os outros elementos da linha i proporcionalmente
                     sum_others = float(np.sum(p_matrix[i, :])) - p_base
                     if sum_others > 1e-9:
+                        exp_arg = -kappa_creep * (n_curr - threshold)
+                        sig_val = (
+                            1.0 / (1.0 + math.exp(exp_arg))
+                            if -40.0 <= exp_arg <= 40.0
+                            else (1.0 if exp_arg < -40.0 else 0.0)
+                        )
+                        p_effective = p_base + (1.0 - p_base) * sig_val
+                        p_effective = min(max(0.98, p_base), max(p_base, p_effective))
+
+                        # Reajusta os outros elementos da linha i proporcionalmente
                         scale = (1.0 - p_effective) / sum_others
                         p_matrix[i, :] = p_matrix[i, :] * scale
-                    p_matrix[i, i] = p_effective
-
-    # Cadeia de Markov aberta: aplica taxas de egress nos nós de portão
-    if egress_rates is not None:
-        egress_arr = np.asarray(egress_rates, dtype=np.float64)
-        if len(egress_arr) == j_nodes:
-            survival = np.clip(1.0 - egress_arr, 0.0, 1.0)[:, np.newaxis]
-            p_matrix = p_matrix * survival
-
-    return p_matrix
-    """
-    Computa a Matriz Estocástica de Transição de Markov P(t) de dimensão J x J (RF01, RF03, RF04).
-    
-    Suporta:
-    - Gravidade Espacial de Huff: Numerador_ij = alpha_j(t) * exp(-lambda_d * d_ij);
-    - Topologia Urbana / Adjacência: A_ij in {0, 1} impede transições mágicas entre portões distantes;
-    - Inércia Temporal Convexo: rho = exp(-dt / tau_dwell);
-    - Cadeia de Markov Aberta com Egress: P_ij = (1 - p_exit,i) * P_ij_interno.
-        
-    Args:
-        dist_matrix: Matriz (J, J) de distâncias euclidianas em metros.
-        alpha_vector: Vetor (J,) de atratividade instantânea dos POIs.
-        lambda_decay: Taxa de atrito espacial lambda_d (padrão 0.005 m^-1 para pedestres).
-        retention_bias: Fator multiplicativo de permanência no mesmo nó.
-        step_minutes: Passo temporal da simulação dt em minutos.
-        dwell_time_minutes: Tempo médio de permanência tau_dwell para inércia.
-        use_inertia: Ativar inércia de permanência temporal.
-        egress_rates: Vetor opcional (J,) com probabilidade de saída de cada nó (GATE).
-        adjacency_matrix: Matriz binária (J, J) de adjacência de ruas/logradouros transitáveis.
-        
-    Returns:
-        np.ndarray: Matriz (J, J) float64 de probabilidades de transição.
-    """
-    d_mat = np.asarray(dist_matrix, dtype=np.float64)
-    alphas = np.asarray(alpha_vector, dtype=np.float64)
-    j_nodes = d_mat.shape[0]
-    
-    if d_mat.shape[0] != d_mat.shape[1]:
-        raise ValueError("A matriz de distâncias deve ser quadrada (J x J).")
-    if alphas.ndim != 1 or len(alphas) != j_nodes:
-        raise ValueError(f"O vetor de atratividades deve ter dimensão igual a {j_nodes}.")
-    if np.any(alphas <= 0.0):
-        raise ValueError("Todos os valores de atratividade alpha_j devem ser estritamente positivos.")
-    if lambda_decay <= 0.0:
-        raise ValueError("A taxa de decaimento lambda_decay deve ser estritamente positiva.")
-
-    # Numerador gravitacional vetorizado: broadcast de alpha_j sobre a exponencial de distâncias
-    spatial_decay = np.exp(-lambda_decay * d_mat)
-    numerator = alphas[np.newaxis, :] * spatial_decay
-
-    # Aplica o viés de permanência no mesmo logradouro se diferente de 1.0
-    if retention_bias != 1.0 and retention_bias > 0.0:
-        np.fill_diagonal(numerator, np.diag(numerator) * retention_bias)
-
-    # Aplica máscara de adjacência topológica urbana (RF01 / Topologia de Rede)
-    if adjacency_matrix is not None:
-        adj = np.asarray(adjacency_matrix, dtype=np.float64)
-        if adj.shape != (j_nodes, j_nodes):
-            raise ValueError(f"A matriz de adjacência deve ter dimensão ({j_nodes}, {j_nodes}).")
-        numerator = numerator * (adj > 0.0).astype(np.float64)
-
-    # Normalização estocástica por linha: Denominador_i = sum_k Numerador_ik
-    denominators = np.sum(numerator, axis=1, keepdims=True)
-    denominators = np.where(denominators <= 0.0, 1.0, denominators)
-    p_matrix = numerator / denominators
-
-    # Inércia temporal baseada no tempo médio de permanência e granularidade Δt
-    if use_inertia and dwell_time_minutes > 0.0 and step_minutes > 0.0:
-        rho = math.exp(-step_minutes / dwell_time_minutes)
-        p_inertial = (1.0 - rho) * p_matrix
-        np.fill_diagonal(p_inertial, np.diag(p_inertial) + rho)
-        p_matrix = p_inertial
+                        p_matrix[i, i] = p_effective
 
     # Cadeia de Markov aberta: aplica taxas de egress nos nós de portão
     if egress_rates is not None:
@@ -664,6 +593,7 @@ class MarkovCirculationSimulator:
                     gamma_seasonality=gamma,
                     step_minutes=dt,
                     use_incremental=True,
+                    day_of_week=day_of_week,
                 )
                 raw_d = macro_dt.delta_N_rotina if macro_dt.delta_N_rotina else macro_dt.vector_N_rotina
                 d_rot = np.asarray(raw_d, dtype=np.float64)
@@ -679,7 +609,7 @@ class MarkovCirculationSimulator:
                 caps = [node.max_capacity for node in self.config.nodes]
                 e_vec = calculate_events_injection(
                     current_time_hours=t_hours,
-                    day_of_week=None,
+                    day_of_week=day_of_week,
                     node_capacities=caps,
                 )
             if len(e_vec) < j_nodes:
@@ -724,6 +654,7 @@ def propagate_markov_flow(
     include_raw_flow: bool = False,
     delta_N_rotina: Optional[Sequence[float]] = None,
     vector_E_eventos: Optional[Sequence[float]] = None,
+    day_of_week: Optional[int] = None,
 ) -> MarkovCirculationResponse:
     """
     Função principal do Subsistema de Circulação de Markov (Doc 03).
@@ -741,4 +672,5 @@ def propagate_markov_flow(
         include_raw_flow=include_raw_flow,
         delta_N_rotina=delta_N_rotina,
         vector_E_eventos=vector_E_eventos,
+        day_of_week=day_of_week,
     )

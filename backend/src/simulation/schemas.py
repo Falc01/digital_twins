@@ -442,7 +442,10 @@ class NodeCoordinate(BaseModel):
     nome_local: str = Field(..., description="Nome amigável do POI ou logradouro")
     lat: float = Field(..., description="Latitude em graus decimais (WGS84)")
     lng: float = Field(..., description="Longitude em graus decimais (WGS84)")
-    poi_type: str = Field(default="POI", description="Categoria: GATE, POI, IGREJA, SHOW")
+    poi_type: str = Field(
+        default="CULTURAL",
+        description="Categoria: GATE, COMERCIO, RELIGIOSO, CULTURAL (aliases legados: POI, IGREJA, SHOW)",
+    )
     base_attraction: float = Field(default=1.0, ge=0.01, description="Peso de atratividade basal alpha_j > 0")
     gate_weight: float = Field(default=0.0, ge=0.0, le=1.0, description="Peso de entrada w_j (se portão)")
     max_capacity: int = Field(default=150, gt=0, description="Capacidade máxima de suporte")
@@ -535,7 +538,7 @@ class MarkovCirculationConfig(BaseModel):
                 nome_local="Largo do Pelourinho",
                 lat=-12.97180,
                 lng=-38.50850,
-                poi_type="SHOW",
+                poi_type="CULTURAL",
                 base_attraction=2.5,
                 gate_weight=0.00,
                 max_capacity=250,
@@ -545,7 +548,7 @@ class MarkovCirculationConfig(BaseModel):
                 nome_local="Terreiro de Jesus",
                 lat=-12.97310,
                 lng=-38.50970,
-                poi_type="IGREJA",
+                poi_type="RELIGIOSO",
                 base_attraction=1.8,
                 gate_weight=0.00,
                 max_capacity=200,
